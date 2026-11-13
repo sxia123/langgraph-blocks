@@ -44,3 +44,90 @@ def test_workflow_runner_pause_resume_and_loop() -> None:
     assert loop_res.status == "done"
     assert loop_res.state["quality_score"] >= 8
     assert loop_res.state["final_response"]
+
+
+def test_runtime_graph_and_runner_support_expanded_blocks() -> None:
+    wf = {
+        "trigger": {"name": "expanded_runtime", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "g1",
+                "type": "guardrail",
+                "config": {"target_var": "user_query", "rule_type": "no_pii", "output_var": "safe"},
+                "branches": {
+                    "pass": [
+                        {"id": "ej1", "type": "extract_json", "config": {"source_var": "user_query", "schema_fields": "intent: str", "output_var": "parsed"}},
+                        {"id": "rag1", "type": "rag_retrieve", "config": {"collection": "kb", "query_expr": "{{user_query}}", "top_k": 2, "output_var": "docs"}},
+                        {
+                            "id": "rt1",
+                            "type": "llm_router",
+                            "config": {"prompt": "Route {{user_query}}", "label_a": "billing", "label_b": "tech", "output_var": "route"},
+                            "branches": {
+                                "route_a": [{"id": "s_a", "type": "set_state", "config": {"target_var": "dept", "value_expr": "BILLING"}}],
+                                "route_b": [{"id": "s_b", "type": "set_state", "config": {"target_var": "dept", "value_expr": "TECH"}}],
+                                "fallback": [{"id": "s_f", "type": "set_state", "config": {"target_var": "dept", "value_expr": "GENERAL"}}],
+                            },
+                        },
+                        {
+                            "id": "fe1",
+                            "type": "for_each",
+                            "config": {"list_var": "docs", "item_var": "cur", "max_items": 2},
+                            "branches": {
+                                "body": [{"id": "mem1", "type": "append_memory", "config": {"role": "assistant", "content_expr": "{{cur}}", "target_var": "notes"}}]
+                            },
+                        },
+                        {"id": "http1", "type": "http_request", "config": {"method": "GET", "url_expr": "https://api.example.com/{{dept}}", "output_var": "http_res"}},
+                        {
+                            "id": "tf1",
+                            "type": "try_fallback",
+                            "config": {"error_var": "err"},
+                            "branches": {
+                                "try": [{"id": "bad_call", "type": "call_tool", "config": {"tool_name": "fail_tool", "arg_expr": "x", "output_var": "x_res"}}],
+                                "fallback": [{"id": "sub1", "type": "sub_workflow", "config": {"workflow_name": "backup", "input_expr": "{{err}}", "output_var": "sub_res"}}],
+                            },
+                        },
+                        {"id": "resp_ok", "type": "respond", "config": {"template": "{{dept}}|{{sub_res}}", "output_var": "final_response"}},
+                    ],
+                    "blocked": [
+                        {"id": "resp_blk", "type": "respond", "config": {"template": "PII_BLOCKED", "output_var": "final_response"}}
+                    ],
+                },
+            }
+        ],
+    }
+
+    def mock_llm(prompt: str, _s: dict) -> str:
+        if "Extract JSON" in prompt:
+            return '{"intent": "billing"}'
+        if "Route" in prompt:
+            return "billing"
+        return "ok"
+
+    def fail_tool(_arg, _s):
+        raise RuntimeError("boom")
+
+    tools = {
+        "fail_tool": fail_tool,
+        "workflow:backup": lambda inp, _s: f"BACKUP({inp})",
+    }
+
+    graph = build_state_graph(wf, llm=mock_llm, tools=tools)
+    sg_ok = graph.invoke({"user_query": "Check invoice"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    assert sg_ok["parsed"] == {"intent": "billing"}
+    assert len(sg_ok["notes"]) == 2
+    assert sg_ok["http_res"]["url"] == "https://api.example.com/BILLING"
+    assert sg_ok["final_response"] == "BILLING|BACKUP(boom)"
+
+    sg_blk = graph.invoke({"user_query": "ssn 123-45-6789"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    assert sg_blk["final_response"] == "PII_BLOCKED"
+
+    runner = WorkflowRunner()
+    run_ok = runner.start(wf, "Check invoice", llm=mock_llm, tools=tools)
+    assert run_ok.status == "done"
+    assert run_ok.state["parsed"] == {"intent": "billing"}
+    assert len(run_ok.state["notes"]) == 2
+    assert run_ok.state["final_response"] == "BILLING|BACKUP(boom)"
+
+    run_blk = runner.start(wf, "contact me at bob@test.com", llm=mock_llm, tools=tools)
+    assert run_blk.status == "done"
+    assert run_blk.state["final_response"] == "PII_BLOCKED"

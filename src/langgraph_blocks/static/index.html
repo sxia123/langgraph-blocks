@@ -25,6 +25,8 @@
 
       --tag-cog-bg: rgba(155, 130, 210, 0.14);
       --tag-cog-fg: #c6b5f0;
+      --tag-mem-bg: rgba(92, 168, 198, 0.14);
+      --tag-mem-fg: #8ecbe2;
       --tag-ctl-bg: rgba(217, 169, 92, 0.14);
       --tag-ctl-fg: #e2be80;
       --tag-hum-bg: rgba(223, 120, 134, 0.14);
@@ -51,6 +53,8 @@
 
       --tag-cog-bg: rgba(124, 92, 191, 0.12);
       --tag-cog-fg: #5e3ea8;
+      --tag-mem-bg: rgba(46, 134, 171, 0.12);
+      --tag-mem-fg: #246885;
       --tag-ctl-bg: rgba(203, 145, 47, 0.13);
       --tag-ctl-fg: #936210;
       --tag-hum-bg: rgba(212, 76, 71, 0.12);
@@ -188,25 +192,144 @@
 
     /* Left Notion Page Sidebar */
     .sidebar {
-      width: 236px;
+      width: 264px;
       flex-shrink: 0;
       background: var(--sidebar);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      padding: 12px 8px;
+      padding: 10px 8px;
       overflow-y: auto;
-      gap: 18px;
+      gap: 14px;
     }
     .sidebar.collapsed {
       display: none;
     }
 
     .side-group-label {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--muted);
       padding: 0 8px 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .side-filter {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 5px 8px;
+      font-size: 12px;
+      color: var(--fg);
+      outline: none;
+      margin-bottom: 6px;
+    }
+    .side-filter:focus {
+      border-color: var(--accent);
+    }
+
+    .insert-target-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 3px 8px 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .insert-target-chip {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--fg);
+      background: var(--pill-bg);
+      padding: 0 5px;
+      border-radius: 3px;
+    }
+    .target-reset-btn {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+    .target-reset-btn:hover {
+      background: var(--card-hover);
+      color: var(--fg);
+    }
+
+    .side-cat-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--faint);
+      padding: 6px 8px 2px;
+    }
+
+    .block-lib-item {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 12.5px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .block-lib-item:hover {
+      background: var(--card-hover);
+      color: var(--fg);
+    }
+    .block-lib-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+    .cat-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+    .dot-cognitive { background: var(--tag-cog-fg); }
+    .dot-memory { background: var(--tag-mem-fg); }
+    .dot-control { background: var(--tag-ctl-fg); }
+    .dot-human { background: var(--tag-hum-fg); }
+    .dot-tools { background: var(--tag-tol-fg); }
+    .dot-trigger { background: var(--tag-rep-fg); }
+    .block-lib-plus {
+      font-size: 12px;
+      color: var(--faint);
+      opacity: 0;
+    }
+    .block-lib-item:hover .block-lib-plus {
+      opacity: 1;
+      color: var(--fg);
+    }
+
+    .branch-target-btn {
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .branch-target-btn:hover,
+    .branch-target-btn.active {
+      background: var(--pill-bg);
+      color: var(--fg);
     }
 
     .side-item {
@@ -393,6 +516,7 @@
       white-space: nowrap;
     }
     .tag-cognitive { background: var(--tag-cog-bg); color: var(--tag-cog-fg); }
+    .tag-memory { background: var(--tag-mem-bg); color: var(--tag-mem-fg); }
     .tag-control { background: var(--tag-ctl-bg); color: var(--tag-ctl-fg); }
     .tag-human { background: var(--tag-hum-bg); color: var(--tag-hum-fg); }
     .tag-tools { background: var(--tag-tol-bg); color: var(--tag-tol-fg); }
@@ -689,7 +813,7 @@
 
     .hidden { display: none !important; }
 
-    @media (max-width: 960px) {
+    @media (max-width: 600px) {
       .sidebar { display: none; }
       .drawer { width: 320px; }
     }
@@ -722,7 +846,7 @@
     <!-- Left Sidebar -->
     <aside id="sidebar" class="sidebar">
       <div>
-        <div class="side-group-label">Workspace</div>
+        <div class="side-group-label"><span>Workspace</span></div>
         <button id="newBlankBtn" type="button" class="side-item active">
           <span>Untitled workflow</span>
           <span style="font-size:12px;color:var(--faint);">Blank</span>
@@ -730,7 +854,20 @@
       </div>
 
       <div>
-        <div class="side-group-label">Starter Templates</div>
+        <div class="side-group-label">
+          <span>Blocks</span>
+          <span id="blockLibCount" style="font-weight:500;color:var(--faint);">18</span>
+        </div>
+        <input id="sidebarBlockFilter" class="side-filter" type="text" placeholder="Filter blocks..." />
+        <div id="insertTargetBar" class="insert-target-bar">
+          <span>Into <span id="insertTargetLabel" class="insert-target-chip">Main flow</span></span>
+          <button id="resetTargetBtn" type="button" class="target-reset-btn hidden" title="Insert at end of main flow">Reset</button>
+        </div>
+        <div id="blockLibrary"></div>
+      </div>
+
+      <div>
+        <div class="side-group-label"><span>Starter Templates</span></div>
         <button type="button" class="side-item preset-btn" data-preset="support_refund_hitl">
           <span>Support Refund + HITL</span>
         </button>
@@ -740,7 +877,7 @@
       </div>
 
       <div>
-        <div class="side-group-label">State Keys</div>
+        <div class="side-group-label"><span>State Keys</span></div>
         <div id="stateKeys" style="padding:2px 8px;display:flex;flex-wrap:wrap;gap:5px;"></div>
       </div>
 
@@ -854,15 +991,37 @@
   </div>
 
   <script>
+    const BLOCK_GROUPS = [
+      { id: "cognitive", label: "Cognitive" },
+      { id: "memory", label: "Memory & RAG" },
+      { id: "control", label: "Control Flow" },
+      { id: "human", label: "Human & Safety" },
+      { id: "tools", label: "Tools & I/O" }
+    ];
+
     const BLOCK_DEFS = [
-      { type: "ask_llm", title: "Ask LLM", desc: "Prompt a model and save text or structured output", cat: "cognitive", container: false, defaults: () => ({ name: "llm_step", model: "gpt-4.1-mini", output_format: "structured", context_mode: "thread_messages", output_var: "llm_result", prompt: "Analyze {{user_query}}." }) },
-      { type: "agent_loop", title: "Agent Tool Loop", desc: "Bounded ReAct loop with tool access", cat: "cognitive", container: false, defaults: () => ({ name: "agent_step", model: "claude-sonnet", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} using available tools." }) },
-      { type: "if_else", title: "If / Else", desc: "Branch execution on a state variable condition", cat: "control", container: true, branches: [["then", "If true"], ["else", "Else"]], defaults: () => ({ left_var: "intent", operator: "==", right_val: "refund" }) },
-      { type: "repeat_until", title: "Repeat Until", desc: "Bounded critique/retry loop with max iterations", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ condition_var: "quality_score", operator: ">=", target_val: "8", max_iterations: 3 }) },
-      { type: "parallel", title: "Parallel", desc: "Run two branches concurrently and join into State", cat: "control", container: true, branches: [["laneA", "Branch A"], ["laneB", "Branch B"]], defaults: () => ({ label: "Parallel stage" }) },
-      { type: "human_approval", title: "Human Approval", desc: "Pause at interrupt() and branch on Approve / Reject", cat: "human", container: true, branches: [["approved", "On approved"], ["rejected", "On rejected"]], defaults: () => ({ question: "Approve action for {{user_query}}?", output_var: "approval" }) },
-      { type: "call_tool", title: "Call Tool", desc: "Invoke a registered Python tool function", cat: "tools", container: false, defaults: () => ({ tool_name: "lookup_order", arg_expr: "{{user_query}}", output_var: "tool_result" }) },
-      { type: "respond", title: "Final Reply", desc: "Format and write the final workflow response", cat: "trigger", container: false, defaults: () => ({ template: "Done: {{llm_result}}", output_var: "final_response" }) }
+      { type: "ask_llm", title: "Ask LLM", desc: "Prompt a model and save text or structured output", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "llm_step", model: "gpt-4.1-mini", output_format: "structured", context_mode: "thread_messages", output_var: "llm_result", prompt: "Analyze {{user_query}}." }) },
+      { type: "extract_json", title: "Extract JSON", desc: "Extract typed JSON schema fields via LLM", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "extract_json", model: "gpt-4.1-mini", source_var: "user_query", schema_fields: "intent: str, urgency: str", output_var: "extracted" }) },
+      { type: "agent_loop", title: "Agent Tool Loop", desc: "Bounded ReAct loop with tool access", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "agent_step", model: "claude-sonnet", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} using available tools." }) },
+
+      { type: "rag_retrieve", title: "RAG Retrieve", desc: "Query a knowledge base collection for top-K docs", group: "memory", cat: "memory", container: false, defaults: () => ({ collection: "support_kb", query_expr: "{{user_query}}", top_k: 3, output_var: "retrieved_docs" }) },
+      { type: "set_state", title: "Set State", desc: "Assign or compute a workflow state variable", group: "memory", cat: "memory", container: false, defaults: () => ({ target_var: "status", value_expr: "triaged" }) },
+      { type: "append_memory", title: "Append Memory", desc: "Append a role/content message to thread history", group: "memory", cat: "memory", container: false, defaults: () => ({ role: "assistant", content_expr: "{{final_response}}", target_var: "messages" }) },
+
+      { type: "if_else", title: "If / Else", desc: "Branch execution on a state variable condition", group: "control", cat: "control", container: true, branches: [["then", "If true"], ["else", "Else"]], defaults: () => ({ left_var: "intent", operator: "==", right_val: "refund" }) },
+      { type: "llm_router", title: "LLM Router", desc: "Semantic 3-way routing via LLM classifier", group: "control", cat: "control", container: true, branches: [["route_a", "Route A"], ["route_b", "Route B"], ["fallback", "Fallback"]], defaults: () => ({ model: "gpt-4.1-mini", label_a: "billing", label_b: "technical", output_var: "route_choice", prompt: "Classify {{user_query}} as billing or technical." }) },
+      { type: "repeat_until", title: "Repeat Until", desc: "Bounded critique/retry loop with max iterations", group: "control", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ condition_var: "quality_score", operator: ">=", target_val: "8", max_iterations: 3 }) },
+      { type: "for_each", title: "For Each", desc: "Iterate over a list state variable item by item", group: "control", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ list_var: "items", item_var: "current_item", max_items: 10 }) },
+      { type: "parallel", title: "Parallel", desc: "Run two branches concurrently and join into State", group: "control", cat: "control", container: true, branches: [["laneA", "Branch A"], ["laneB", "Branch B"]], defaults: () => ({ label: "Parallel stage" }) },
+      { type: "try_fallback", title: "Try / Fallback", desc: "Run subgraph safely and catch errors to fallback", group: "control", cat: "control", container: true, branches: [["try", "Try"], ["fallback", "Fallback"]], defaults: () => ({ error_var: "last_error" }) },
+
+      { type: "human_approval", title: "Human Approval", desc: "Pause at interrupt() and branch on Approve / Reject", group: "human", cat: "human", container: true, branches: [["approved", "On approved"], ["rejected", "On rejected"]], defaults: () => ({ question: "Approve action for {{user_query}}?", output_var: "approval" }) },
+      { type: "guardrail", title: "Guardrail", desc: "Validate state (not_empty, no_pii, max_length, regex)", group: "human", cat: "human", container: true, branches: [["pass", "If safe"], ["blocked", "If blocked"]], defaults: () => ({ target_var: "user_query", rule_type: "no_pii", rule_arg: "", output_var: "guardrail_passed" }) },
+
+      { type: "call_tool", title: "Call Tool", desc: "Invoke a registered Python tool function", group: "tools", cat: "tools", container: false, defaults: () => ({ tool_name: "lookup_order", arg_expr: "{{user_query}}", output_var: "tool_result" }) },
+      { type: "http_request", title: "HTTP Request", desc: "Call an external HTTP endpoint", group: "tools", cat: "tools", container: false, defaults: () => ({ method: "GET", url_expr: "https://api.example.com/orders/{{user_query}}", body_expr: "", output_var: "http_response" }) },
+      { type: "sub_workflow", title: "Sub-Workflow", desc: "Delegate to another LangGraph workflow", group: "tools", cat: "tools", container: false, defaults: () => ({ workflow_name: "billing_specialist", input_expr: "{{user_query}}", output_var: "sub_result" }) },
+      { type: "respond", title: "Final Reply", desc: "Format and write the final workflow response", group: "tools", cat: "trigger", container: false, defaults: () => ({ template: "Done: {{llm_result}}", output_var: "final_response" }) }
     ];
     const DEF_MAP = Object.fromEntries(BLOCK_DEFS.map(d => [d.type, d]));
 
@@ -884,10 +1043,19 @@
       target: "stategraph",
       compiledCode: "",
       stateVars: ["user_query"],
+      sidebarFilter: "",
       slashTarget: { parentId: null, branchKey: null },
       slashIndex: 0,
       sim: { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" }
     };
+
+    function esc(v) {
+      return String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
 
     function sanitizeName(raw) {
       return (raw || "untitled_workflow").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") || "untitled_workflow";
@@ -905,6 +1073,20 @@
         }
       }
       return null;
+    }
+
+    function getTargetLabel() {
+      const { parentId, branchKey } = state.slashTarget;
+      if (!parentId || !branchKey) return "Main flow";
+      const found = findNode(parentId);
+      if (!found) {
+        state.slashTarget = { parentId: null, branchKey: null };
+        return "Main flow";
+      }
+      const def = DEF_MAP[found.blk.type];
+      const match = def?.branches?.find(([k]) => k === branchKey);
+      const branchLabel = match ? match[1] : branchKey;
+      return `${def?.title || found.blk.type} · ${branchLabel}`;
     }
 
     async function syncCompile() {
@@ -942,6 +1124,7 @@
         if (found?.blk.branches?.[branchKey]) {
           found.blk.branches[branchKey].push(blk);
         } else {
+          state.slashTarget = { parentId: null, branchKey: null };
           state.workflow.blocks.push(blk);
         }
       } else {
@@ -971,26 +1154,37 @@
       if (!found) return;
       found.list.splice(found.idx, 1);
       if (state.selectedId === id) state.selectedId = null;
+      if (state.slashTarget.parentId === id) state.slashTarget = { parentId: null, branchKey: null };
       renderAll();
       syncCompile();
     }
 
     function summarize(blk) {
       const c = blk.config;
-      if (blk.type === "ask_llm") return `${c.name} · ${c.model} → <span class="var-chip">${c.output_var}</span>`;
-      if (blk.type === "agent_loop") return `${c.name} · tools [${c.tools}] · max ${c.max_steps} → <span class="var-chip">${c.output_var}</span>`;
-      if (blk.type === "if_else") return `If <span class="var-chip">${c.left_var}</span> ${c.operator} "${c.right_val}"`;
-      if (blk.type === "repeat_until") return `Until <span class="var-chip">${c.condition_var}</span> ${c.operator} ${c.target_val} (max ${c.max_iterations})`;
+      if (blk.type === "ask_llm") return `${esc(c.name)} · ${esc(c.model)} → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "extract_json") return `fields (${esc(c.schema_fields)}) from <span class="var-chip">${esc(c.source_var)}</span> → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "agent_loop") return `${esc(c.name)} · tools [${esc(c.tools)}] · max ${esc(c.max_steps)} → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "rag_retrieve") return `${esc(c.collection)} · top ${esc(c.top_k)} (${esc(c.query_expr)}) → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "set_state") return `<span class="var-chip">${esc(c.target_var)}</span> = ${esc(c.value_expr)}`;
+      if (blk.type === "append_memory") return `[${esc(c.role)}] ${esc(c.content_expr)} → <span class="var-chip">${esc(c.target_var)}</span>`;
+      if (blk.type === "if_else") return `If <span class="var-chip">${esc(c.left_var)}</span> ${esc(c.operator)} "${esc(c.right_val)}"`;
+      if (blk.type === "llm_router") return `Route "${esc(c.label_a)}" / "${esc(c.label_b)}" → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "repeat_until") return `Until <span class="var-chip">${esc(c.condition_var)}</span> ${esc(c.operator)} ${esc(c.target_val)} (max ${esc(c.max_iterations)})`;
+      if (blk.type === "for_each") return `Each <span class="var-chip">${esc(c.item_var)}</span> in <span class="var-chip">${esc(c.list_var)}</span> (max ${esc(c.max_items)})`;
       if (blk.type === "parallel") return `Run branches concurrently`;
-      if (blk.type === "human_approval") return `Pause interrupt() → <span class="var-chip">${c.output_var}</span>`;
-      if (blk.type === "call_tool") return `${c.tool_name}(${c.arg_expr}) → <span class="var-chip">${c.output_var}</span>`;
-      if (blk.type === "respond") return `${c.template} → <span class="var-chip">${c.output_var}</span>`;
+      if (blk.type === "try_fallback") return `Catch errors → <span class="var-chip">${esc(c.error_var)}</span>`;
+      if (blk.type === "human_approval") return `Pause interrupt() → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "guardrail") return `${esc(c.rule_type)}${c.rule_arg ? `(${esc(c.rule_arg)})` : ""} on <span class="var-chip">${esc(c.target_var)}</span> → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "call_tool") return `${esc(c.tool_name)}(${esc(c.arg_expr)}) → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "http_request") return `${esc(c.method)} ${esc(c.url_expr)} → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "sub_workflow") return `${esc(c.workflow_name)}(${esc(c.input_expr)}) → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "respond") return `${esc(c.template)} → <span class="var-chip">${esc(c.output_var)}</span>`;
       return "";
     }
 
     function renderTree(blocks) {
       return blocks.map(blk => {
-        const def = DEF_MAP[blk.type];
+        const def = DEF_MAP[blk.type] || { title: blk.type, cat: "tools", container: false };
         const cls = state.sim.activeBlockId === blk.id
           ? (state.sim.status === "paused" ? "paused" : "running")
           : (state.selectedId === blk.id ? "selected" : "");
@@ -998,14 +1192,21 @@
         let branchesHtml = "";
         if (def.container) {
           branchesHtml = `<div class="branches-wrap">` + def.branches.map(([bKey, bLabel]) => {
-            const children = blk.branches[bKey] || [];
+            const children = blk.branches?.[bKey] || [];
+            let displayLabel = bLabel;
+            if (blk.type === "llm_router") {
+              if (bKey === "route_a") displayLabel = `Route A (${blk.config.label_a || "a"})`;
+              if (bKey === "route_b") displayLabel = `Route B (${blk.config.label_b || "b"})`;
+            }
+            const isTarget = state.slashTarget.parentId === blk.id && state.slashTarget.branchKey === bKey;
             return `<div>
               <div class="branch-group-label">
-                <span>${bLabel}</span>
+                <span>${esc(displayLabel)}</span>
+                <button type="button" class="branch-target-btn ${isTarget ? "active" : ""}" data-p="${blk.id}" data-b="${bKey}" title="Target sidebar inserts here">${isTarget ? "Targeting" : "Target"}</button>
               </div>
               <div class="block-stack">${renderTree(children)}</div>
               <button type="button" class="slash-prompt slash-prompt-inline open-slash" data-p="${blk.id}" data-b="${bKey}">
-                <span>+</span><span>Add block to ${bLabel.toLowerCase()}</span>
+                <span>+</span><span>Add block to ${esc(displayLabel.toLowerCase())}</span>
               </button>
             </div>`;
           }).join("") + `</div>`;
@@ -1015,7 +1216,7 @@
           <span class="block-handle" title="Block">&#8942;&#8942;</span>
           <div class="block-header">
             <div class="block-main">
-              <span class="tag tag-${def.cat}">${def.title}</span>
+              <span class="tag tag-${def.cat}">${esc(def.title)}</span>
               <span class="block-summary">${summarize(blk)}</span>
             </div>
             <div class="block-actions" onclick="event.stopPropagation()">
@@ -1051,6 +1252,20 @@
         });
       });
 
+      treeEl.querySelectorAll(".branch-target-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const p = btn.getAttribute("data-p");
+          const b = btn.getAttribute("data-b");
+          if (state.slashTarget.parentId === p && state.slashTarget.branchKey === b) {
+            state.slashTarget = { parentId: null, branchKey: null };
+          } else {
+            state.slashTarget = { parentId: p, branchKey: b };
+          }
+          renderAll();
+        });
+      });
+
       treeEl.querySelectorAll(".open-slash").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -1071,6 +1286,13 @@
       }
     }
 
+    const SELECT_OPTIONS = {
+      rule_type: ["not_empty", "no_pii", "max_length", "regex"],
+      operator: ["==", "!=", "in", ">=", ">", "<=", "<"],
+      method: ["GET", "POST", "PUT", "DELETE"],
+      role: ["assistant", "user", "system"]
+    };
+
     function renderInspector() {
       const body = document.getElementById("dtab-inspector");
       const found = state.selectedId ? findNode(state.selectedId) : null;
@@ -1079,35 +1301,79 @@
         return;
       }
       const blk = found.blk;
-      const def = DEF_MAP[blk.type];
+      const def = DEF_MAP[blk.type] || { title: blk.type, cat: "tools" };
       const cfg = blk.config;
       const rows = Object.keys(cfg).map(k => {
-        const isLong = k === "prompt" || k === "question" || k === "template";
-        const isNum = k === "max_steps" || k === "max_iterations";
+        const isLong = k === "prompt" || k === "question" || k === "template" || k === "body_expr" || k === "content_expr";
+        const isNum = k === "max_steps" || k === "max_iterations" || k === "max_items" || k === "top_k";
+        const opts = SELECT_OPTIONS[k];
+        if (opts) {
+          return `<div class="field">
+            <label>${esc(k)}</label>
+            <select class="n-select insp-f" data-k="${esc(k)}">
+              ${opts.map(o => `<option value="${esc(o)}" ${String(cfg[k]) === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+            </select>
+          </div>`;
+        }
         return `<div class="field">
-          <label>${k}</label>
+          <label>${esc(k)}</label>
           ${isLong
-            ? `<textarea class="n-textarea insp-f" rows="3" data-k="${k}">${cfg[k]}</textarea>`
-            : `<input class="n-input insp-f" type="${isNum ? "number" : "text"}" data-k="${k}" value="${String(cfg[k]).replace(/"/g, "&quot;")}" />`
+            ? `<textarea class="n-textarea insp-f" rows="3" data-k="${esc(k)}">${esc(cfg[k])}</textarea>`
+            : `<input class="n-input insp-f" type="${isNum ? "number" : "text"}" data-k="${esc(k)}" value="${esc(cfg[k])}" />`
           }
         </div>`;
       }).join("");
 
       body.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <span class="tag tag-${def.cat}">${def.title}</span>
-          <span style="font-size:12px;color:var(--muted);font-family:ui-monospace,monospace;">${blk.id}</span>
+          <span class="tag tag-${def.cat}">${esc(def.title)}</span>
+          <span style="font-size:12px;color:var(--muted);font-family:ui-monospace,monospace;">${esc(blk.id)}</span>
         </div>
         ${rows}
       `;
 
       body.querySelectorAll(".insp-f").forEach(inp => {
-        inp.addEventListener("input", () => {
+        const evt = inp.tagName === "SELECT" ? "change" : "input";
+        inp.addEventListener(evt, () => {
           const k = inp.getAttribute("data-k");
           cfg[k] = inp.type === "number" ? Math.max(1, Number(inp.value) || 1) : inp.value;
           renderCanvas();
           syncCompile();
         });
+      });
+    }
+
+    function renderBlockLibrary() {
+      const q = state.sidebarFilter.trim().toLowerCase();
+      const targetLabel = getTargetLabel();
+      document.getElementById("insertTargetLabel").textContent = targetLabel;
+      document.getElementById("resetTargetBtn").classList.toggle("hidden", !state.slashTarget.parentId);
+
+      let visibleCount = 0;
+      const html = BLOCK_GROUPS.map(g => {
+        const items = BLOCK_DEFS.filter(b =>
+          b.group === g.id && (!q || b.title.toLowerCase().includes(q) || b.desc.toLowerCase().includes(q) || g.label.toLowerCase().includes(q))
+        );
+        if (!items.length) return "";
+        visibleCount += items.length;
+        return `<div>
+          <div class="side-cat-title">${esc(g.label)}</div>
+          ${items.map(b => `
+            <button type="button" class="block-lib-item" data-type="${esc(b.type)}" title="${esc(b.desc)}">
+              <span class="block-lib-left">
+                <span class="cat-dot dot-${b.cat}"></span>
+                <span>${esc(b.title)}</span>
+              </span>
+              <span class="block-lib-plus">+</span>
+            </button>`).join("")}
+        </div>`;
+      }).join("");
+
+      document.getElementById("blockLibCount").textContent = `${visibleCount}`;
+      const lib = document.getElementById("blockLibrary");
+      lib.innerHTML = html || `<div style="padding:4px 8px;font-size:12px;color:var(--muted);">No matching blocks</div>`;
+      lib.querySelectorAll(".block-lib-item").forEach(btn => {
+        btn.addEventListener("click", () => insertBlock(btn.getAttribute("data-type")));
       });
     }
 
@@ -1117,8 +1383,10 @@
         btn.classList.toggle("active", btn.getAttribute("data-preset") === state.activeDocKey);
       });
 
+      renderBlockLibrary();
+
       document.getElementById("stateKeys").innerHTML = state.stateVars
-        .map(v => `<span class="var-chip">${v}</span>`)
+        .map(v => `<span class="var-chip">${esc(v)}</span>`)
         .join("");
       document.getElementById("compiledCode").textContent = state.compiledCode;
     }
@@ -1263,6 +1531,16 @@
       document.getElementById("sidebar").classList.toggle("collapsed");
     });
 
+    document.getElementById("sidebarBlockFilter").addEventListener("input", (e) => {
+      state.sidebarFilter = e.target.value || "";
+      renderBlockLibrary();
+    });
+
+    document.getElementById("resetTargetBtn").addEventListener("click", () => {
+      state.slashTarget = { parentId: null, branchKey: null };
+      renderAll();
+    });
+
     function openDrawer(tab) {
       if (state.drawerOpen && state.drawerTab === tab) {
         state.drawerOpen = false;
@@ -1330,6 +1608,7 @@
         blocks: []
       };
       state.selectedId = null;
+      state.slashTarget = { parentId: null, branchKey: null };
       state.sim = { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" };
       renderAll();
       syncCompile();
@@ -1343,6 +1622,7 @@
         state.workflow = structuredClone(presets[key]);
         state.pageTitle = key === "support_refund_hitl" ? "Support Refund + HITL" : "Research & Critique";
         state.selectedId = state.workflow.blocks[0]?.id || null;
+        state.slashTarget = { parentId: null, branchKey: null };
         state.sim = { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" };
         renderAll();
         syncCompile();

@@ -9,15 +9,33 @@ from typing import Any
 
 ALLOWED_CHECKPOINTERS = frozenset({"MemorySaver", "PostgresSaver", "SqliteSaver"})
 ALLOWED_OPERATORS = frozenset({"==", "!=", ">=", ">", "<=", "<", "in"})
+ALLOWED_GUARDRAIL_RULES = frozenset({"not_empty", "no_pii", "max_length", "regex"})
 
 CONTAINER_BRANCHES: dict[str, tuple[str, ...]] = {
     "if_else": ("then", "else"),
     "repeat_until": ("body",),
+    "for_each": ("body",),
     "parallel": ("laneA", "laneB"),
+    "try_fallback": ("try", "fallback"),
     "human_approval": ("approved", "rejected"),
+    "llm_router": ("route_a", "route_b", "fallback"),
+    "guardrail": ("pass", "blocked"),
 }
 
-LEAF_TYPES = frozenset({"ask_llm", "agent_loop", "call_tool", "respond"})
+LEAF_TYPES = frozenset(
+    {
+        "ask_llm",
+        "extract_json",
+        "agent_loop",
+        "rag_retrieve",
+        "set_state",
+        "append_memory",
+        "call_tool",
+        "http_request",
+        "sub_workflow",
+        "respond",
+    }
+)
 ALL_BLOCK_TYPES = frozenset(CONTAINER_BRANCHES.keys()) | LEAF_TYPES
 
 _CAMEL_TO_SNAKE = {
@@ -27,10 +45,27 @@ _CAMEL_TO_SNAKE = {
     "contextMode": "context_mode",
     "maxSteps": "max_steps",
     "maxIterations": "max_iterations",
+    "maxItems": "max_items",
     "leftVar": "left_var",
     "rightVal": "right_val",
     "conditionVar": "condition_var",
     "targetVal": "target_val",
+    "targetVar": "target_var",
+    "valueExpr": "value_expr",
+    "contentExpr": "content_expr",
+    "sourceVar": "source_var",
+    "schemaFields": "schema_fields",
+    "queryExpr": "query_expr",
+    "topK": "top_k",
+    "listVar": "list_var",
+    "itemVar": "item_var",
+    "errorVar": "error_var",
+    "ruleType": "rule_type",
+    "ruleArg": "rule_arg",
+    "urlExpr": "url_expr",
+    "bodyExpr": "body_expr",
+    "workflowName": "workflow_name",
+    "inputExpr": "input_expr",
     "toolName": "tool_name",
     "argExpr": "arg_expr",
 }
@@ -231,6 +266,27 @@ def validate_workflow(workflow: WorkflowSchema) -> list[str]:
                 if max_iters < 1:
                     errors.append(f"{loc}: repeat_until requires max_iterations >= 1.")
 
+            if node.type == "for_each":
+                try:
+                    max_items = int(node.config.get("max_items", 10))
+                except (TypeError, ValueError):
+                    max_items = 0
+                if max_items < 1:
+                    errors.append(f"{loc}: for_each requires max_items >= 1.")
+
+            if node.type == "rag_retrieve":
+                try:
+                    top_k = int(node.config.get("top_k", 3))
+                except (TypeError, ValueError):
+                    top_k = 0
+                if top_k < 1:
+                    errors.append(f"{loc}: rag_retrieve requires top_k >= 1.")
+
+            if node.type == "guardrail":
+                rule_type = str(node.config.get("rule_type", "not_empty"))
+                if rule_type not in ALLOWED_GUARDRAIL_RULES:
+                    errors.append(f"{loc}: unsupported guardrail rule_type '{rule_type}'.")
+
             expected_branches = CONTAINER_BRANCHES.get(node.type)
             if expected_branches is not None:
                 for b_key in expected_branches:
@@ -248,7 +304,7 @@ def validate_workflow(workflow: WorkflowSchema) -> list[str]:
 def collect_state_vars(workflow: WorkflowSchema) -> list[str]:
     """Collect ordered, sanitized state keys needed by the compiled graph."""
     keys: list[str] = []
-    seen: set[str] = set()
+    seen: set[str] = {"messages"}
 
     def add_key(raw: str) -> None:
         key = sanitize_identifier(raw)
@@ -260,14 +316,17 @@ def collect_state_vars(workflow: WorkflowSchema) -> list[str]:
 
     def walk(nodes: list[BlockNode]) -> None:
         for node in nodes:
-            out_var = node.config.get("output_var")
-            if out_var:
-                add_key(str(out_var))
+            for field_name in ("output_var", "target_var", "error_var", "list_var", "item_var", "source_var"):
+                val = node.config.get(field_name)
+                if val:
+                    add_key(str(val))
             if node.type == "repeat_until":
                 add_key(f"_loop_{sanitize_identifier(node.id, 'loop')}_count")
                 cond_var = node.config.get("condition_var")
                 if cond_var:
                     add_key(str(cond_var))
+            elif node.type == "for_each":
+                add_key(f"_for_{sanitize_identifier(node.id, 'for')}_idx")
             elif node.type == "if_else":
                 left_var = node.config.get("left_var")
                 if left_var:
