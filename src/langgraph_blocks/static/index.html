@@ -194,7 +194,7 @@
 
     /* Left Notion Page Sidebar */
     .sidebar {
-      width: 256px;
+      width: clamp(192px, 22vw, 256px);
       flex-shrink: 0;
       background: var(--sidebar);
       border-right: 1px solid var(--border);
@@ -373,9 +373,11 @@
     /* Center Blank Dark Canvas */
     .canvas-scroll {
       flex: 1;
+      min-width: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       background: var(--bg);
-      padding: 48px 32px 140px;
+      padding: 36px clamp(14px, 3.5vw, 32px) 140px;
       position: relative;
     }
 
@@ -389,7 +391,7 @@
       background: transparent;
       border: 0;
       outline: none;
-      font-size: 32px;
+      font-size: clamp(22px, 3vw, 32px);
       font-weight: 700;
       letter-spacing: -0.02em;
       color: var(--fg);
@@ -403,9 +405,9 @@
     /* Notion Page Properties */
     .props-table {
       display: grid;
-      grid-template-columns: 120px 1fr;
+      grid-template-columns: minmax(90px, 114px) minmax(0, 1fr);
       row-gap: 4px;
-      column-gap: 12px;
+      column-gap: 10px;
       padding: 8px 0 18px;
       margin-bottom: 18px;
       border-bottom: 1px solid var(--border);
@@ -422,6 +424,7 @@
     .prop-value {
       display: flex;
       align-items: center;
+      min-width: 0;
     }
 
     .prop-inline-input, .prop-inline-select {
@@ -432,6 +435,8 @@
       font-size: 13px;
       color: var(--fg);
       outline: none;
+      min-width: 0;
+      max-width: 100%;
     }
     .prop-inline-input:hover, .prop-inline-select:hover,
     .prop-inline-input:focus, .prop-inline-select:focus {
@@ -539,7 +544,9 @@
       border: 1px solid var(--border);
       cursor: pointer;
       outline: none;
-      max-width: 175px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      max-width: 100%;
     }
     .inline-chip-select:hover,
     .inline-chip-select:focus {
@@ -598,16 +605,17 @@
 
     .block-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 10px;
+      gap: 6px;
     }
 
     .block-main {
+      flex: 1;
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
     }
 
@@ -789,7 +797,7 @@
 
     /* Right Drawer (Inspector / Code / Run) */
     .drawer {
-      width: 370px;
+      width: clamp(260px, 31vw, 370px);
       flex-shrink: 0;
       background: var(--sidebar);
       border-left: 1px solid var(--border);
