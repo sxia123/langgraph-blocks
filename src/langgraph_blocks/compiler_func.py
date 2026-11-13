@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .compiler_sg import _RUNTIME_HELPERS, _checkpointer_import
+from .compiler_sg import _RUNTIME_HELPERS, _checkpointer_import, _llm_call_kwargs
 from .schema import BlockNode, WorkflowSchema, parse_workflow, sanitize_identifier
 
 
@@ -36,13 +36,14 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "llm_output")))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
                 prompt = str(cfg.get("prompt", ""))
+                llm_kw = _llm_call_kwargs(cfg)
                 task_defs.append(
                     "\n".join(
                         [
                             "    @task",
                             f"    def {t_name}(cur_state: dict[str, Any]) -> Any:",
                             f"        prompt = _render({prompt!r}, cur_state)",
-                            f"        return _call_llm(llm, prompt, cur_state, {t_name!r}, {model!r})",
+                            f"        return _call_llm(llm, prompt, cur_state, {t_name!r}, {model!r}{llm_kw})",
                         ]
                     )
                 )
@@ -54,13 +55,14 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 src_var = sanitize_identifier(str(cfg.get("source_var", wf.trigger.input_var)))
                 fields_spec = str(cfg.get("schema_fields", "summary: str"))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
+                llm_kw = _llm_call_kwargs(cfg)
                 task_defs.append(
                     "\n".join(
                         [
                             "    @task",
                             f"    def {t_name}(cur_state: dict[str, Any]) -> dict[str, Any]:",
                             f"        prompt = 'Extract JSON fields (' + {fields_spec!r} + ') from: ' + str(cur_state.get({src_var!r}, ''))",
-                            f"        raw = _call_llm(llm, prompt, cur_state, 'extract_json', {model!r})",
+                            f"        raw = _call_llm(llm, prompt, cur_state, 'extract_json', {model!r}{llm_kw})",
                             f"        return _parse_extracted_json(raw, {fields_spec!r})",
                         ]
                     )
@@ -74,6 +76,7 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 max_steps = max(1, int(cfg.get("max_steps", 5)))
                 prompt = str(cfg.get("prompt", ""))
                 model = str(cfg.get("model", "claude-sonnet"))
+                llm_kw = _llm_call_kwargs(cfg)
                 task_defs.append(
                     "\n".join(
                         [
@@ -82,7 +85,7 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
                             f"        prompt = _render({prompt!r}, cur_state)",
                             "        if react_runner is not None:",
                             f"            return react_runner(prompt=prompt, tools={tools_raw!r}, max_steps={max_steps}, state=cur_state)",
-                            f"        return _call_llm(llm, prompt, cur_state, {t_name!r}, {model!r})",
+                            f"        return _call_llm(llm, prompt, cur_state, {t_name!r}, {model!r}{llm_kw})",
                         ]
                     )
                 )
@@ -207,13 +210,14 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 label_a = str(cfg.get("label_a", "billing"))
                 label_b = str(cfg.get("label_b", "technical"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "route_choice")))
+                llm_kw = _llm_call_kwargs(cfg)
                 task_defs.append(
                     "\n".join(
                         [
                             "    @task",
                             f"    def {t_name}(cur_state: dict[str, Any]) -> str:",
                             f"        prompt = _render({prompt!r}, cur_state)",
-                            f"        raw = str(_call_llm(llm, prompt, cur_state, 'llm_router', {model!r})).strip().lower()",
+                            f"        raw = str(_call_llm(llm, prompt, cur_state, 'llm_router', {model!r}{llm_kw})).strip().lower()",
                             f"        if {label_a.lower()!r} in raw:",
                             f"            return {label_a!r}",
                             f"        if {label_b.lower()!r} in raw:",

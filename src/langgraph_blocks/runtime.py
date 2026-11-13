@@ -88,13 +88,26 @@ def _route_choice_from_llm(
     model: str,
     label_a: str,
     label_b: str,
+    **llm_opts: Any,
 ) -> str:
-    raw = str(_invoke_llm(llm, prompt, state, "llm_router", model)).strip().lower()
+    raw = str(_invoke_llm(llm, prompt, state, "llm_router", model, **llm_opts)).strip().lower()
     if label_a.lower() in raw:
         return label_a
     if label_b.lower() in raw:
         return label_b
     return "fallback"
+
+
+def _llm_opts_from_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Extract optional model generation settings cleanly from block config."""
+    opts: dict[str, Any] = {}
+    if cfg.get("temperature") not in (None, ""):
+        opts["temperature"] = float(cfg["temperature"])
+    if cfg.get("max_tokens") not in (None, ""):
+        opts["max_tokens"] = int(cfg["max_tokens"])
+    if str(cfg.get("system_prompt", "")).strip():
+        opts["system_prompt"] = str(cfg["system_prompt"])
+    return opts
 
 
 def _invoke_registered_tool(
@@ -151,7 +164,19 @@ def _run_sub_workflow(
     return f"[sub_workflow:{wf_name}] {sub_in}"
 
 
-def _invoke_llm(llm: Any, prompt: str, state: dict[str, Any], step_name: str, model: str) -> Any:
+def _invoke_llm(
+    llm: Any,
+    prompt: str,
+    state: dict[str, Any],
+    step_name: str,
+    model: str,
+    *,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    system_prompt: str = "",
+) -> Any:
+    sys_text = render_template(system_prompt, state) if system_prompt else ""
+    full_prompt = f"{sys_text}\n\n{prompt}" if sys_text else prompt
     if llm is None:
         if "classify" in step_name.lower() or "intent" in step_name.lower():
             q = str(state.get("user_query", "")).lower()
@@ -161,11 +186,22 @@ def _invoke_llm(llm: Any, prompt: str, state: dict[str, Any], step_name: str, mo
             next_score = cur + 2
             state["_sim_score"] = next_score
             return next_score
-        return f"[{model}:{step_name}] Generated response for: {prompt[:80]}"
+        return f"[{model}:{step_name}] Generated response for: {full_prompt[:80]}"
     if hasattr(llm, "invoke"):
-        res = llm.invoke(prompt)
+        target = llm
+        bind_kw: dict[str, Any] = {}
+        if temperature is not None:
+            bind_kw["temperature"] = temperature
+        if max_tokens is not None:
+            bind_kw["max_tokens"] = max_tokens
+        if bind_kw and hasattr(llm, "bind"):
+            try:
+                target = llm.bind(**bind_kw)
+            except Exception:
+                target = llm
+        res = target.invoke(full_prompt)
         return getattr(res, "content", res)
-    return llm(prompt, state)
+    return llm(full_prompt, state)
 
 
 def _invoke_tool(tool_map: dict[str, Callable[..., Any]], tool_name: str, arg_val: str, state: dict[str, Any]) -> Any:
@@ -239,10 +275,11 @@ def build_state_graph(
                 out_var = sanitize_identifier(str(cfg.get("output_var", "llm_output")))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
                 prompt_tpl = str(cfg.get("prompt", ""))
+                opts = _llm_opts_from_cfg(cfg)
 
                 def node_fn(s: dict[str, Any]) -> dict[str, Any]:
                     prompt = render_template(prompt_tpl, s)
-                    return {out_var: _invoke_llm(llm, prompt, s, step_name, model)}
+                    return {out_var: _invoke_llm(llm, prompt, s, step_name, model, **opts)}
 
                 n_name = next_node(step_name, node_fn)
                 return n_name, n_name
@@ -253,10 +290,11 @@ def build_state_graph(
                 src_var = sanitize_identifier(str(cfg.get("source_var", wf.trigger.input_var)))
                 fields_spec = str(cfg.get("schema_fields", "summary: str"))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
+                opts = _llm_opts_from_cfg(cfg)
 
                 def node_fn(s: dict[str, Any]) -> dict[str, Any]:
                     prompt = f"Extract JSON fields ({fields_spec}) from: {s.get(src_var, '')}"
-                    raw = _invoke_llm(llm, prompt, s, "extract_json", model)
+                    raw = _invoke_llm(llm, prompt, s, "extract_json", model, **opts)
                     return {out_var: parse_extracted_json(raw, fields_spec)}
 
                 n_name = next_node(step_name, node_fn)
@@ -269,13 +307,14 @@ def build_state_graph(
                 max_steps = max(1, int(cfg.get("max_steps", 5)))
                 prompt_tpl = str(cfg.get("prompt", ""))
                 model = str(cfg.get("model", "claude-sonnet"))
+                opts = _llm_opts_from_cfg(cfg)
 
                 def node_fn(s: dict[str, Any]) -> dict[str, Any]:
                     prompt = render_template(prompt_tpl, s)
                     if react_runner is not None:
                         res = react_runner(prompt=prompt, tools=tools_list, max_steps=max_steps, state=s)
                     else:
-                        res = _invoke_llm(llm, prompt, s, step_name, model)
+                        res = _invoke_llm(llm, prompt, s, step_name, model, **opts)
                     return {out_var: res}
 
                 n_name = next_node(step_name, node_fn)
@@ -388,10 +427,11 @@ def build_state_graph(
                 label_a = str(cfg.get("label_a", "billing"))
                 label_b = str(cfg.get("label_b", "technical"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "route_choice")))
+                opts = _llm_opts_from_cfg(cfg)
 
                 def route_fn(s: dict[str, Any]) -> dict[str, Any]:
                     choice = _route_choice_from_llm(
-                        llm, render_template(prompt_tpl, s), s, model, label_a, label_b
+                        llm, render_template(prompt_tpl, s), s, model, label_a, label_b, **opts
                     )
                     return {out_var: choice}
 
@@ -723,7 +763,7 @@ class WorkflowRunner:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "llm_output")))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
                 prompt = render_template(str(cfg.get("prompt", "")), state)
-                val = _invoke_llm(llm, prompt, state, step_name, model)
+                val = _invoke_llm(llm, prompt, state, step_name, model, **_llm_opts_from_cfg(cfg))
                 state[out_var] = val
                 trace.append(TraceEvent(blk.id, blk.type, f"Ask LLM ({step_name})", f"Set {out_var} = {val!r}"))
 
@@ -734,7 +774,7 @@ class WorkflowRunner:
                 fields_spec = str(cfg.get("schema_fields", "summary: str"))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
                 prompt = f"Extract JSON fields ({fields_spec}) from: {state.get(src_var, '')}"
-                raw = _invoke_llm(llm, prompt, state, "extract_json", model)
+                raw = _invoke_llm(llm, prompt, state, "extract_json", model, **_llm_opts_from_cfg(cfg))
                 val = parse_extracted_json(raw, fields_spec)
                 state[out_var] = val
                 trace.append(TraceEvent(blk.id, blk.type, f"Extract JSON ({step_name})", f"Parsed into {out_var}"))
@@ -744,11 +784,14 @@ class WorkflowRunner:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "agent_draft")))
                 max_steps = max(1, int(cfg.get("max_steps", 5)))
                 tools_list = [t.strip() for t in str(cfg.get("tools", "")).split(",") if t.strip()]
+                model = str(cfg.get("model", "claude-sonnet"))
                 prompt = render_template(str(cfg.get("prompt", "")), state)
                 if react_runner is not None:
                     val = react_runner(prompt=prompt, tools=tools_list, max_steps=max_steps, state=state)
+                elif llm is not None:
+                    val = _invoke_llm(llm, prompt, state, step_name, model, **_llm_opts_from_cfg(cfg))
                 else:
-                    val = f"Tool-grounded answer using {tools_list} (max_steps={max_steps})"
+                    val = f"[{model}:{step_name}] Tool-grounded answer using {tools_list} (max_steps={max_steps})"
                 state[out_var] = val
                 trace.append(TraceEvent(blk.id, blk.type, f"Agent Loop ({step_name})", f"Set {out_var}"))
 
@@ -831,7 +874,9 @@ class WorkflowRunner:
                 label_a = str(cfg.get("label_a", "billing"))
                 label_b = str(cfg.get("label_b", "technical"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "route_choice")))
-                choice = _route_choice_from_llm(llm, prompt, state, model, label_a, label_b)
+                choice = _route_choice_from_llm(
+                    llm, prompt, state, model, label_a, label_b, **_llm_opts_from_cfg(cfg)
+                )
                 state[out_var] = choice
                 branch_key = "route_a" if choice == label_a else ("route_b" if choice == label_b else "fallback")
                 trace.append(TraceEvent(blk.id, blk.type, "LLM Router", f"Routed {out_var}={choice!r} -> {branch_key}"))

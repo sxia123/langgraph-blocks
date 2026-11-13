@@ -180,3 +180,47 @@ def test_generated_stategraph_executes_expanded_blocks_on_real_langgraph() -> No
     assert ok_out["http_res"]["status"] == 201
     assert ok_out["err"] == "upstream_timeout"
     assert "SUB(Need my invoice copy)|recovered:upstream_timeout" == ok_out["final_response"]
+
+
+def test_generated_stategraph_passes_model_temperature_max_tokens_and_system_prompt() -> None:
+    wf = {
+        "trigger": {"name": "ai_opts", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "ask_1",
+                "type": "ask_llm",
+                "config": {
+                    "name": "writer",
+                    "model": "claude-sonnet-4-5",
+                    "temperature": 0.4,
+                    "max_tokens": 512,
+                    "system_prompt": "Be concise for {{user_query}}",
+                    "prompt": "Draft answer",
+                    "output_var": "draft",
+                },
+            }
+        ],
+    }
+    code = compile_to_state_graph(wf)
+    assert "claude-sonnet-4-5" in code
+    assert "temperature=0.4" in code
+    assert "max_tokens=512" in code
+    assert "system_prompt='Be concise for {{user_query}}'" in code
+
+    class FakeBoundChatModel:
+        def __init__(self, kwargs=None):
+            self.kwargs = kwargs or {}
+            self.calls = []
+
+        def bind(self, **kw):
+            return FakeBoundChatModel({**self.kwargs, **kw})
+
+        def invoke(self, prompt: str):
+            self.calls.append((prompt, self.kwargs))
+            return f"BOUND({self.kwargs.get('temperature')},{self.kwargs.get('max_tokens')})::{prompt}"
+
+    build_workflow = _load_compiled_graph(code)
+    graph = build_workflow(llm=FakeBoundChatModel())
+    out = graph.invoke({"user_query": "LangGraph"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    assert out["draft"].startswith("BOUND(0.4,512)::Be concise for LangGraph")
+    assert "Draft answer" in out["draft"]

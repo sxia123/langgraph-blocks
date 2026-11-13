@@ -131,3 +131,43 @@ def test_runtime_graph_and_runner_support_expanded_blocks() -> None:
     run_blk = runner.start(wf, "contact me at bob@test.com", llm=mock_llm, tools=tools)
     assert run_blk.status == "done"
     assert run_blk.state["final_response"] == "PII_BLOCKED"
+
+
+def test_runtime_llm_generation_settings() -> None:
+    wf = {
+        "trigger": {"name": "ai_runtime_opts", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "ask_1",
+                "type": "ask_llm",
+                "config": {
+                    "name": "answer",
+                    "model": "gemini-2.5-pro",
+                    "temperature": 0.7,
+                    "max_tokens": 256,
+                    "system_prompt": "System: help with {{user_query}}",
+                    "prompt": "User question",
+                    "output_var": "reply",
+                },
+            }
+        ],
+    }
+
+    seen: list[tuple[str, dict]] = []
+
+    class FakeChat:
+        def __init__(self, bound=None):
+            self.bound = bound or {}
+
+        def bind(self, **kw):
+            return FakeChat({**self.bound, **kw})
+
+        def invoke(self, text: str):
+            seen.append((text, self.bound))
+            return f"{self.bound.get('temperature')}/{self.bound.get('max_tokens')}|{text}"
+
+    runner = WorkflowRunner()
+    res = runner.start(wf, "routing", llm=FakeChat())
+    assert res.status == "done"
+    assert seen and seen[0][1] == {"temperature": 0.7, "max_tokens": 256}
+    assert "System: help with routing" in res.state["reply"]

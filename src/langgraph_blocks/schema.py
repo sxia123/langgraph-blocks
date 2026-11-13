@@ -68,6 +68,8 @@ _CAMEL_TO_SNAKE = {
     "inputExpr": "input_expr",
     "toolName": "tool_name",
     "argExpr": "arg_expr",
+    "systemPrompt": "system_prompt",
+    "maxTokens": "max_tokens",
 }
 
 
@@ -286,6 +288,22 @@ def validate_workflow(workflow: WorkflowSchema) -> list[str]:
                 rule_type = str(node.config.get("rule_type", "not_empty"))
                 if rule_type not in ALLOWED_GUARDRAIL_RULES:
                     errors.append(f"{loc}: unsupported guardrail rule_type '{rule_type}'.")
+
+            if node.type in {"ask_llm", "extract_json", "agent_loop", "llm_router"}:
+                if "temperature" in node.config and node.config["temperature"] not in (None, ""):
+                    try:
+                        temp_val = float(node.config["temperature"])
+                    except (TypeError, ValueError):
+                        temp_val = -1.0
+                    if not (0.0 <= temp_val <= 2.0):
+                        errors.append(f"{loc}: temperature must be between 0.0 and 2.0.")
+                if "max_tokens" in node.config and node.config["max_tokens"] not in (None, ""):
+                    try:
+                        tok_val = int(node.config["max_tokens"])
+                    except (TypeError, ValueError):
+                        tok_val = 0
+                    if tok_val < 1:
+                        errors.append(f"{loc}: max_tokens must be >= 1.")
 
             expected_branches = CONTAINER_BRANCHES.get(node.type)
             if expected_branches is not None:

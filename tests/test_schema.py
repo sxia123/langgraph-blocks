@@ -159,3 +159,15 @@ def test_expanded_18_block_catalog_validation_and_state_vars() -> None:
     assert "missing branch 'blocked'" in err_text
     assert "max_items >= 1" in err_text
     assert "top_k >= 1" in err_text
+
+    bad_ai = {
+        "trigger": {"name": "bad_ai", "input_var": "q", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {"id": "a1", "type": "ask_llm", "config": {"model": "claude-sonnet-4-5", "temperature": 2.5, "maxTokens": 0}},
+        ],
+    }
+    with pytest.raises(ValidationError) as ai_exc:
+        parse_workflow(bad_ai)
+    ai_err = " | ".join(ai_exc.value.errors)
+    assert "temperature must be between 0.0 and 2.0" in ai_err
+    assert "max_tokens must be >= 1" in ai_err

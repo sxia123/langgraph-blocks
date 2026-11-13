@@ -486,13 +486,114 @@
       font-size: 13px;
       line-height: 1;
       user-select: none;
-      opacity: 0;
-      transition: opacity 0.1s ease;
+      opacity: 0.45;
+      cursor: grab;
+      transition: opacity 0.1s ease, color 0.1s ease;
     }
 
     .block-row:hover > .block-handle,
     .block-row.selected > .block-handle {
       opacity: 1;
+      color: var(--muted);
+    }
+
+    .block-row.is-dragging,
+    .block-lib-item.is-dragging {
+      opacity: 0.42;
+    }
+
+    .block-row.drop-before {
+      box-shadow: inset 0 2px 0 0 var(--accent);
+    }
+
+    .block-row.drop-after {
+      box-shadow: inset 0 -2px 0 0 var(--accent);
+    }
+
+    .branch-drop-zone {
+      border-radius: 5px;
+      padding: 2px 4px;
+      min-height: 28px;
+      transition: background 0.1s ease, outline-color 0.1s ease;
+    }
+
+    .branch-drop-zone.drop-inside,
+    .canvas-drop-end.drop-inside {
+      background: rgba(35, 131, 226, 0.09);
+      outline: 1px dashed rgba(35, 131, 226, 0.6);
+    }
+
+    .canvas-drop-end {
+      margin-top: 6px;
+      border-radius: 6px;
+      transition: background 0.12s ease, outline-color 0.12s ease;
+    }
+
+    .inline-chip-select {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--pill-bg);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      outline: none;
+      max-width: 175px;
+    }
+    .inline-chip-select:hover,
+    .inline-chip-select:focus {
+      border-color: var(--accent);
+      background: var(--card-hover);
+    }
+    .inline-chip-select option,
+    .n-select option,
+    .n-select optgroup {
+      background: var(--popover);
+      color: var(--fg);
+    }
+
+    .insp-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--faint);
+      margin: 14px 0 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .n-range {
+      flex: 1;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .var-insert-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .var-insert-btn {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--pill-bg);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .var-insert-btn:hover {
+      color: var(--fg);
+      border-color: var(--border-strong);
     }
 
     .block-header {
@@ -923,6 +1024,12 @@
               <option value="SqliteSaver">SqliteSaver</option>
             </select>
           </div>
+
+          <div class="prop-label">Default AI model</div>
+          <div class="prop-value" style="gap:8px;flex-wrap:wrap;">
+            <select id="propDefaultModel" class="prop-inline-select"></select>
+            <button id="applyDefaultModelBtn" type="button" class="target-reset-btn" style="border:1px solid var(--border);padding:2px 7px;" title="Set all AI blocks in this workflow to the selected model">Apply to all AI blocks</button>
+          </div>
         </div>
 
         <!-- HITL Interrupt Banner -->
@@ -940,14 +1047,16 @@
         <!-- Block Flow -->
         <div id="blockTree" class="block-stack"></div>
 
-        <!-- Root Add / Slash Prompt -->
-        <div id="emptyHint" class="empty-canvas-hint">
-          Blank canvas ready. Click below or press <code>/</code> to insert your first block.
+        <!-- Root Drop / Slash Area -->
+        <div id="canvasDropEnd" class="canvas-drop-end">
+          <div id="emptyHint" class="empty-canvas-hint">
+            Blank canvas ready. Drag a block from the sidebar, click below, or press <code>/</code> to begin.
+          </div>
+          <button id="rootSlashBtn" type="button" class="slash-prompt">
+            <span>+</span>
+            <span>Add a block, or press <code>/</code></span>
+          </button>
         </div>
-        <button id="rootSlashBtn" type="button" class="slash-prompt">
-          <span>+</span>
-          <span>Add a block, or press <code>/</code></span>
-        </button>
       </div>
     </main>
 
@@ -1003,17 +1112,95 @@
       { id: "tools", label: "Tools & I/O" }
     ];
 
+    const MODEL_GROUPS = [
+      { provider: "OpenAI", models: ["gpt-4.1-mini", "gpt-4.1", "gpt-4o", "o4-mini"] },
+      { provider: "Anthropic", models: ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-3-5"] },
+      { provider: "Google Gemini", models: ["gemini-2.5-pro", "gemini-2.5-flash"] },
+      { provider: "Open Weights", models: ["llama-3.3-70b", "qwen-2.5-72b", "deepseek-r1"] }
+    ];
+    const PRESET_MODEL_SET = new Set(MODEL_GROUPS.flatMap(g => g.models));
+    const AI_BLOCK_TYPES = new Set(["ask_llm", "extract_json", "agent_loop", "llm_router"]);
+
+    const FIELD_LABELS = {
+      name: "Step Name",
+      model: "AI Model",
+      temperature: "Temperature",
+      max_tokens: "Max Tokens",
+      system_prompt: "System Prompt",
+      prompt: "Prompt",
+      output_format: "Output Format",
+      context_mode: "Context Mode",
+      output_var: "Output Variable",
+      source_var: "Source Variable",
+      schema_fields: "Schema Fields",
+      tools: "Tools (comma-separated)",
+      max_steps: "Max Steps",
+      collection: "Collection",
+      query_expr: "Query Expression",
+      top_k: "Top K Results",
+      target_var: "Target Variable",
+      value_expr: "Value Expression",
+      role: "Message Role",
+      content_expr: "Content Expression",
+      left_var: "Left Variable",
+      operator: "Operator",
+      right_val: "Right Value",
+      label_a: "Route A Label",
+      label_b: "Route B Label",
+      condition_var: "Condition Variable",
+      target_val: "Target Value",
+      max_iterations: "Max Iterations",
+      list_var: "List Variable",
+      item_var: "Item Variable",
+      max_items: "Max Items",
+      error_var: "Error Variable",
+      question: "Approval Question",
+      rule_type: "Guardrail Rule",
+      rule_arg: "Rule Argument",
+      tool_name: "Tool Name",
+      arg_expr: "Argument Expression",
+      method: "HTTP Method",
+      url_expr: "URL Expression",
+      body_expr: "Body Payload",
+      workflow_name: "Sub-Workflow Name",
+      input_expr: "Input Expression",
+      template: "Reply Template"
+    };
+
+    const state = {
+      activeDocKey: "blank",
+      pageTitle: "Untitled workflow",
+      defaultModel: "gpt-4.1-mini",
+      workflow: {
+        version: "0.1",
+        trigger: { name: "untitled_workflow", input_var: "user_query", checkpointer: "MemorySaver" },
+        blocks: []
+      },
+      selectedId: null,
+      drawerOpen: false,
+      drawerTab: "inspector",
+      target: "stategraph",
+      compiledCode: "",
+      stateVars: ["user_query"],
+      sidebarFilter: "",
+      slashTarget: { parentId: null, branchKey: null },
+      slashIndex: 0,
+      sim: { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" }
+    };
+
+    const dragState = { mode: null, type: null, blockId: null };
+
     const BLOCK_DEFS = [
-      { type: "ask_llm", title: "Ask LLM", desc: "Prompt a model and save text or structured output", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "llm_step", model: "gpt-4.1-mini", output_format: "structured", context_mode: "thread_messages", output_var: "llm_result", prompt: "Analyze {{user_query}}." }) },
-      { type: "extract_json", title: "Extract JSON", desc: "Extract typed JSON schema fields via LLM", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "extract_json", model: "gpt-4.1-mini", source_var: "user_query", schema_fields: "intent: str, urgency: str", output_var: "extracted" }) },
-      { type: "agent_loop", title: "Agent Tool Loop", desc: "Bounded ReAct loop with tool access", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "agent_step", model: "claude-sonnet", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} using available tools." }) },
+      { type: "ask_llm", title: "Ask LLM", desc: "Prompt a model and save text or structured output", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "llm_step", model: state.defaultModel, temperature: 0.2, max_tokens: 1024, system_prompt: "", output_format: "structured", context_mode: "thread_messages", output_var: "llm_result", prompt: "Analyze {{user_query}}." }) },
+      { type: "extract_json", title: "Extract JSON", desc: "Extract typed JSON schema fields via LLM", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "extract_json", model: state.defaultModel, temperature: 0.0, max_tokens: 1024, system_prompt: "", source_var: "user_query", schema_fields: "intent: str, urgency: str", output_var: "extracted" }) },
+      { type: "agent_loop", title: "Agent Tool Loop", desc: "Bounded ReAct loop with tool access", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "agent_step", model: state.defaultModel, temperature: 0.2, max_tokens: 2048, system_prompt: "", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} using available tools." }) },
 
       { type: "rag_retrieve", title: "RAG Retrieve", desc: "Query a knowledge base collection for top-K docs", group: "memory", cat: "memory", container: false, defaults: () => ({ collection: "support_kb", query_expr: "{{user_query}}", top_k: 3, output_var: "retrieved_docs" }) },
       { type: "set_state", title: "Set State", desc: "Assign or compute a workflow state variable", group: "memory", cat: "memory", container: false, defaults: () => ({ target_var: "status", value_expr: "triaged" }) },
       { type: "append_memory", title: "Append Memory", desc: "Append a role/content message to thread history", group: "memory", cat: "memory", container: false, defaults: () => ({ role: "assistant", content_expr: "{{final_response}}", target_var: "messages" }) },
 
       { type: "if_else", title: "If / Else", desc: "Branch execution on a state variable condition", group: "control", cat: "control", container: true, branches: [["then", "If true"], ["else", "Else"]], defaults: () => ({ left_var: "intent", operator: "==", right_val: "refund" }) },
-      { type: "llm_router", title: "LLM Router", desc: "Semantic 3-way routing via LLM classifier", group: "control", cat: "control", container: true, branches: [["route_a", "Route A"], ["route_b", "Route B"], ["fallback", "Fallback"]], defaults: () => ({ model: "gpt-4.1-mini", label_a: "billing", label_b: "technical", output_var: "route_choice", prompt: "Classify {{user_query}} as billing or technical." }) },
+      { type: "llm_router", title: "LLM Router", desc: "Semantic 3-way routing via LLM classifier", group: "control", cat: "control", container: true, branches: [["route_a", "Route A"], ["route_b", "Route B"], ["fallback", "Fallback"]], defaults: () => ({ model: state.defaultModel, temperature: 0.0, max_tokens: 256, system_prompt: "", label_a: "billing", label_b: "technical", output_var: "route_choice", prompt: "Classify {{user_query}} as billing or technical." }) },
       { type: "repeat_until", title: "Repeat Until", desc: "Bounded critique/retry loop with max iterations", group: "control", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ condition_var: "quality_score", operator: ">=", target_val: "8", max_iterations: 3 }) },
       { type: "for_each", title: "For Each", desc: "Iterate over a list state variable item by item", group: "control", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ list_var: "items", item_var: "current_item", max_items: 10 }) },
       { type: "parallel", title: "Parallel", desc: "Run two branches concurrently and join into State", group: "control", cat: "control", container: true, branches: [["laneA", "Branch A"], ["laneB", "Branch B"]], defaults: () => ({ label: "Parallel stage" }) },
@@ -1033,25 +1220,23 @@
     const nextId = (p) => `${p}_${++idCounter}`;
 
     let presets = {};
-    const state = {
-      activeDocKey: "blank",
-      pageTitle: "Untitled workflow",
-      workflow: {
-        version: "0.1",
-        trigger: { name: "untitled_workflow", input_var: "user_query", checkpointer: "MemorySaver" },
-        blocks: []
-      },
-      selectedId: null,
-      drawerOpen: false,
-      drawerTab: "inspector",
-      target: "stategraph",
-      compiledCode: "",
-      stateVars: ["user_query"],
-      sidebarFilter: "",
-      slashTarget: { parentId: null, branchKey: null },
-      slashIndex: 0,
-      sim: { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" }
-    };
+
+    function renderModelOptionsHtml(currentModel, includeCustomOption = false) {
+      const val = String(currentModel || "gpt-4.1-mini");
+      let html = "";
+      if (val && !PRESET_MODEL_SET.has(val)) {
+        html += `<option value="${esc(val)}" selected>${esc(val)} (custom)</option>`;
+      }
+      html += MODEL_GROUPS.map(g =>
+        `<optgroup label="${esc(g.provider)}">${g.models.map(m =>
+          `<option value="${esc(m)}" ${m === val ? "selected" : ""}>${esc(m)}</option>`
+        ).join("")}</optgroup>`
+      ).join("");
+      if (includeCustomOption) {
+        html += `<option value="__custom__">Custom model...</option>`;
+      }
+      return html;
+    }
 
     function esc(v) {
       return String(v ?? "")
@@ -1115,23 +1300,55 @@
       renderSidebarAndCode();
     }
 
-    function insertBlock(type) {
+    function createBlockInstance(type) {
       const def = DEF_MAP[type];
       const blk = { id: nextId(type), type, config: def.defaults() };
       if (def.container) {
         blk.branches = {};
         for (const [k] of def.branches) blk.branches[k] = [];
       }
-      const { parentId, branchKey } = state.slashTarget;
-      if (parentId && branchKey) {
-        const found = findNode(parentId);
-        if (found?.blk.branches?.[branchKey]) {
-          found.blk.branches[branchKey].push(blk);
-        } else {
-          state.slashTarget = { parentId: null, branchKey: null };
-          state.workflow.blocks.push(blk);
+      return blk;
+    }
+
+    function getListForTarget(parentId, branchKey) {
+      if (!parentId || !branchKey) return state.workflow.blocks;
+      return findNode(parentId)?.blk.branches?.[branchKey] || null;
+    }
+
+    function isDescendant(ancestorId, candidateId) {
+      if (!ancestorId || !candidateId) return false;
+      if (ancestorId === candidateId) return true;
+      const found = findNode(ancestorId);
+      if (!found?.blk.branches) return false;
+      for (const k of Object.keys(found.blk.branches)) {
+        for (const child of found.blk.branches[k]) {
+          if (child.id === candidateId || isDescendant(child.id, candidateId)) return true;
         }
+      }
+      return false;
+    }
+
+    function applyModelToWorkflow(blocks, model) {
+      for (const blk of blocks) {
+        if (AI_BLOCK_TYPES.has(blk.type)) {
+          blk.config.model = model;
+        }
+        if (blk.branches) {
+          for (const k of Object.keys(blk.branches)) {
+            applyModelToWorkflow(blk.branches[k], model);
+          }
+        }
+      }
+    }
+
+    function insertBlock(type) {
+      const blk = createBlockInstance(type);
+      const { parentId, branchKey } = state.slashTarget;
+      const dest = getListForTarget(parentId, branchKey);
+      if (dest) {
+        dest.push(blk);
       } else {
+        state.slashTarget = { parentId: null, branchKey: null };
         state.workflow.blocks.push(blk);
       }
       state.selectedId = blk.id;
@@ -1140,6 +1357,38 @@
       closeSlashMenu();
       renderAll();
       syncCompile();
+    }
+
+    function performDrop(parentId, branchKey, index) {
+      const dest = getListForTarget(parentId, branchKey);
+      if (!dest) return;
+      let idx = Math.max(0, Math.min(index, dest.length));
+
+      if (dragState.mode === "palette" && dragState.type) {
+        const blk = createBlockInstance(dragState.type);
+        dest.splice(idx, 0, blk);
+        state.selectedId = blk.id;
+        state.drawerOpen = true;
+        state.drawerTab = "inspector";
+        renderAll();
+        syncCompile();
+        return;
+      }
+
+      if (dragState.mode === "move" && dragState.blockId) {
+        if (parentId && (dragState.blockId === parentId || isDescendant(dragState.blockId, parentId))) {
+          return;
+        }
+        const src = findNode(dragState.blockId);
+        if (!src) return;
+        if (src.list === dest && (idx === src.idx || idx === src.idx + 1)) return;
+        const [moved] = src.list.splice(src.idx, 1);
+        if (src.list === dest && src.idx < idx) idx -= 1;
+        dest.splice(idx, 0, moved);
+        state.selectedId = moved.id;
+        renderAll();
+        syncCompile();
+      }
     }
 
     function moveBlock(id, delta) {
@@ -1163,16 +1412,22 @@
       syncCompile();
     }
 
+    function inlineModelChip(blk) {
+      return `<select class="inline-chip-select inline-model-sel" data-blk-id="${esc(blk.id)}" title="Switch AI model">
+        ${renderModelOptionsHtml(blk.config.model || state.defaultModel, false)}
+      </select>`;
+    }
+
     function summarize(blk) {
       const c = blk.config;
-      if (blk.type === "ask_llm") return `${esc(c.name)} · ${esc(c.model)} → <span class="var-chip">${esc(c.output_var)}</span>`;
-      if (blk.type === "extract_json") return `fields (${esc(c.schema_fields)}) from <span class="var-chip">${esc(c.source_var)}</span> → <span class="var-chip">${esc(c.output_var)}</span>`;
-      if (blk.type === "agent_loop") return `${esc(c.name)} · tools [${esc(c.tools)}] · max ${esc(c.max_steps)} → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "ask_llm") return `${esc(c.name)} · ${inlineModelChip(blk)} → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "extract_json") return `${inlineModelChip(blk)} · (${esc(c.schema_fields)}) from <span class="var-chip">${esc(c.source_var)}</span> → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "agent_loop") return `${esc(c.name)} · ${inlineModelChip(blk)} · [${esc(c.tools)}] → <span class="var-chip">${esc(c.output_var)}</span>`;
       if (blk.type === "rag_retrieve") return `${esc(c.collection)} · top ${esc(c.top_k)} (${esc(c.query_expr)}) → <span class="var-chip">${esc(c.output_var)}</span>`;
       if (blk.type === "set_state") return `<span class="var-chip">${esc(c.target_var)}</span> = ${esc(c.value_expr)}`;
       if (blk.type === "append_memory") return `[${esc(c.role)}] ${esc(c.content_expr)} → <span class="var-chip">${esc(c.target_var)}</span>`;
       if (blk.type === "if_else") return `If <span class="var-chip">${esc(c.left_var)}</span> ${esc(c.operator)} "${esc(c.right_val)}"`;
-      if (blk.type === "llm_router") return `Route "${esc(c.label_a)}" / "${esc(c.label_b)}" → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "llm_router") return `${inlineModelChip(blk)} · "${esc(c.label_a)}" / "${esc(c.label_b)}" → <span class="var-chip">${esc(c.output_var)}</span>`;
       if (blk.type === "repeat_until") return `Until <span class="var-chip">${esc(c.condition_var)}</span> ${esc(c.operator)} ${esc(c.target_val)} (max ${esc(c.max_iterations)})`;
       if (blk.type === "for_each") return `Each <span class="var-chip">${esc(c.item_var)}</span> in <span class="var-chip">${esc(c.list_var)}</span> (max ${esc(c.max_items)})`;
       if (blk.type === "parallel") return `Run branches concurrently`;
@@ -1186,8 +1441,8 @@
       return "";
     }
 
-    function renderTree(blocks) {
-      return blocks.map(blk => {
+    function renderTree(blocks, parentId = "", branchKey = "") {
+      return blocks.map((blk, idx) => {
         const def = DEF_MAP[blk.type] || { title: blk.type, cat: "tools", container: false };
         const cls = state.sim.activeBlockId === blk.id
           ? (state.sim.status === "paused" ? "paused" : "running")
@@ -1203,21 +1458,21 @@
               if (bKey === "route_b") displayLabel = `Route B (${blk.config.label_b || "b"})`;
             }
             const isTarget = state.slashTarget.parentId === blk.id && state.slashTarget.branchKey === bKey;
-            return `<div>
+            return `<div class="branch-drop-zone" data-drop-parent="${esc(blk.id)}" data-drop-branch="${esc(bKey)}">
               <div class="branch-group-label">
                 <span>${esc(displayLabel)}</span>
                 <button type="button" class="branch-target-btn ${isTarget ? "active" : ""}" data-p="${blk.id}" data-b="${bKey}" title="Target sidebar inserts here">${isTarget ? "Targeting" : "Target"}</button>
               </div>
-              <div class="block-stack">${renderTree(children)}</div>
+              <div class="block-stack">${renderTree(children, blk.id, bKey)}</div>
               <button type="button" class="slash-prompt slash-prompt-inline open-slash" data-p="${blk.id}" data-b="${bKey}">
-                <span>+</span><span>Add block to ${esc(displayLabel.toLowerCase())}</span>
+                <span>+</span><span>Add or drop block into ${esc(displayLabel.toLowerCase())}</span>
               </button>
             </div>`;
           }).join("") + `</div>`;
         }
 
-        return `<div class="block-row ${cls}" data-blk="${blk.id}">
-          <span class="block-handle" title="Block">&#8942;&#8942;</span>
+        return `<div class="block-row ${cls}" draggable="true" data-blk="${blk.id}" data-parent-id="${esc(parentId)}" data-branch-key="${esc(branchKey)}" data-index="${idx}">
+          <span class="block-handle" title="Drag to reorder or move into branch">&#8942;&#8942;</span>
           <div class="block-header">
             <div class="block-main">
               <span class="tag tag-${def.cat}">${esc(def.title)}</span>
@@ -1239,6 +1494,7 @@
       document.getElementById("pageTitleInput").value = state.pageTitle;
       document.getElementById("propInputVar").value = state.workflow.trigger.input_var;
       document.getElementById("propCheckpointer").value = state.workflow.trigger.checkpointer;
+      document.getElementById("propDefaultModel").innerHTML = renderModelOptionsHtml(state.defaultModel, false);
 
       const isEmpty = state.workflow.blocks.length === 0;
       document.getElementById("emptyHint").classList.toggle("hidden", !isEmpty);
@@ -1246,8 +1502,33 @@
       const treeEl = document.getElementById("blockTree");
       treeEl.innerHTML = renderTree(state.workflow.blocks);
 
+      treeEl.querySelectorAll(".inline-model-sel").forEach(sel => {
+        const row = sel.closest(".block-row");
+        sel.addEventListener("mousedown", (e) => {
+          e.stopPropagation();
+          if (row) row.setAttribute("draggable", "false");
+        });
+        sel.addEventListener("mouseup", () => {
+          if (row) row.setAttribute("draggable", "true");
+        });
+        sel.addEventListener("blur", () => {
+          if (row) row.setAttribute("draggable", "true");
+        });
+        sel.addEventListener("click", (e) => e.stopPropagation());
+        sel.addEventListener("change", (e) => {
+          e.stopPropagation();
+          const found = findNode(sel.getAttribute("data-blk-id"));
+          if (!found) return;
+          found.blk.config.model = sel.value;
+          state.selectedId = found.blk.id;
+          renderInspector();
+          syncCompile();
+        });
+      });
+
       treeEl.querySelectorAll("[data-blk]").forEach(el => {
         el.addEventListener("click", (e) => {
+          if (e.target.closest("select, input, textarea")) return;
           e.stopPropagation();
           state.selectedId = el.getAttribute("data-blk");
           state.drawerOpen = true;
@@ -1294,47 +1575,162 @@
       rule_type: ["not_empty", "no_pii", "max_length", "regex"],
       operator: ["==", "!=", "in", ">=", ">", "<=", "<"],
       method: ["GET", "POST", "PUT", "DELETE"],
-      role: ["assistant", "user", "system"]
+      role: ["assistant", "user", "system"],
+      output_format: ["structured", "text", "json"],
+      context_mode: ["thread_messages", "state_only", "last_message"]
     };
+
+    const LONG_FIELDS = new Set(["prompt", "system_prompt", "question", "template", "body_expr", "content_expr"]);
+    const NUM_FIELDS = new Set(["max_steps", "max_iterations", "max_items", "top_k", "max_tokens"]);
+    const TEMPLATE_FIELDS = new Set(["prompt", "system_prompt", "question", "template", "query_expr", "arg_expr", "url_expr", "body_expr", "content_expr", "input_expr", "value_expr"]);
 
     function renderInspector() {
       const body = document.getElementById("dtab-inspector");
       const found = state.selectedId ? findNode(state.selectedId) : null;
       if (!found) {
-        body.innerHTML = `<div style="color:var(--muted);font-size:13px;">Click any block on the canvas to edit its properties.</div>`;
+        body.innerHTML = `<div style="color:var(--muted);font-size:13px;">Click or drag any block onto the canvas to edit its AI model, prompts, and properties.</div>`;
         return;
       }
       const blk = found.blk;
       const def = DEF_MAP[blk.type] || { title: blk.type, cat: "tools" };
       const cfg = blk.config;
-      const rows = Object.keys(cfg).map(k => {
-        const isLong = k === "prompt" || k === "question" || k === "template" || k === "body_expr" || k === "content_expr";
-        const isNum = k === "max_steps" || k === "max_iterations" || k === "max_items" || k === "top_k";
+      const isAiBlock = AI_BLOCK_TYPES.has(blk.type);
+
+      const keys = Object.keys(cfg);
+      if (isAiBlock) {
+        for (const extra of ["model", "temperature", "max_tokens", "system_prompt"]) {
+          if (!keys.includes(extra)) keys.splice(1, 0, extra);
+        }
+      }
+
+      const aiSectionKeys = ["model", "temperature", "max_tokens", "output_format", "context_mode", "system_prompt"];
+      const orderedKeys = isAiBlock
+        ? [...aiSectionKeys.filter(k => keys.includes(k)), ...keys.filter(k => !aiSectionKeys.includes(k))]
+        : keys;
+
+      const renderField = (k) => {
+        const label = FIELD_LABELS[k] || k;
+        if (k === "model") {
+          const curModel = String(cfg.model ?? state.defaultModel);
+          const isCustom = curModel && !PRESET_MODEL_SET.has(curModel);
+          return `<div class="field">
+            <label>${esc(label)}</label>
+            <select class="n-select" id="inspModelSelect">
+              ${renderModelOptionsHtml(curModel, true)}
+            </select>
+            <input id="inspCustomModel" class="n-input ${isCustom ? "" : "hidden"}" style="margin-top:6px;" type="text" placeholder="Enter custom model ID (e.g. ollama/llama3.2)" value="${esc(curModel)}" />
+          </div>`;
+        }
+        if (k === "temperature") {
+          const tVal = cfg.temperature !== undefined && cfg.temperature !== "" ? Number(cfg.temperature) : 0.2;
+          return `<div class="field">
+            <label>${esc(label)}</label>
+            <div class="range-row">
+              <input id="inspTempRange" class="n-range" type="range" min="0" max="2" step="0.1" value="${tVal}" />
+              <span id="inspTempVal" class="var-chip">${tVal.toFixed(1)}</span>
+            </div>
+          </div>`;
+        }
         const opts = SELECT_OPTIONS[k];
         if (opts) {
+          const val = String(cfg[k] ?? opts[0]);
           return `<div class="field">
-            <label>${esc(k)}</label>
+            <label>${esc(label)}</label>
             <select class="n-select insp-f" data-k="${esc(k)}">
-              ${opts.map(o => `<option value="${esc(o)}" ${String(cfg[k]) === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+              ${opts.map(o => `<option value="${esc(o)}" ${val === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
             </select>
           </div>`;
         }
+        const isLong = LONG_FIELDS.has(k);
+        const isNum = NUM_FIELDS.has(k);
+        const val = cfg[k] ?? (k === "max_tokens" ? 1024 : "");
+        const placeholder = k === "system_prompt" ? "Optional system instructions (supports {{state_var}})" : "";
         return `<div class="field">
-          <label>${esc(k)}</label>
+          <label>${esc(label)}</label>
           ${isLong
-            ? `<textarea class="n-textarea insp-f" rows="3" data-k="${esc(k)}">${esc(cfg[k])}</textarea>`
-            : `<input class="n-input insp-f" type="${isNum ? "number" : "text"}" data-k="${esc(k)}" value="${esc(cfg[k])}" />`
+            ? `<textarea class="n-textarea insp-f" rows="${k === "system_prompt" ? 2 : 3}" data-k="${esc(k)}" placeholder="${esc(placeholder)}">${esc(val)}</textarea>`
+            : `<input class="n-input insp-f" type="${isNum ? "number" : "text"}" data-k="${esc(k)}" value="${esc(val)}" />`
           }
+          ${TEMPLATE_FIELDS.has(k) && state.stateVars.length ? `
+            <div class="var-insert-row">
+              ${state.stateVars.slice(0, 6).map(v => `<button type="button" class="var-insert-btn" data-target-k="${esc(k)}" data-var="${esc(v)}">+ {{${esc(v)}}}</button>`).join("")}
+            </div>` : ""}
         </div>`;
-      }).join("");
+      };
+
+      let fieldsHtml = "";
+      if (isAiBlock) {
+        const aiFields = orderedKeys.filter(k => aiSectionKeys.includes(k));
+        const otherFields = orderedKeys.filter(k => !aiSectionKeys.includes(k));
+        fieldsHtml = `
+          <div class="insp-section-title" style="margin-top:0;padding-top:0;border-top:0;">Model &amp; Generation</div>
+          ${aiFields.map(renderField).join("")}
+          <div class="insp-section-title">Prompt &amp; Flow</div>
+          ${otherFields.map(renderField).join("")}
+        `;
+      } else {
+        fieldsHtml = orderedKeys.map(renderField).join("");
+      }
 
       body.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <span class="tag tag-${def.cat}">${esc(def.title)}</span>
           <span style="font-size:12px;color:var(--muted);font-family:ui-monospace,monospace;">${esc(blk.id)}</span>
         </div>
-        ${rows}
+        ${fieldsHtml}
       `;
+
+      const modelSel = document.getElementById("inspModelSelect");
+      const customInp = document.getElementById("inspCustomModel");
+      if (modelSel && customInp) {
+        modelSel.addEventListener("change", () => {
+          if (modelSel.value === "__custom__") {
+            customInp.classList.remove("hidden");
+            customInp.focus();
+            customInp.select();
+          } else {
+            customInp.classList.add("hidden");
+            cfg.model = modelSel.value;
+            customInp.value = cfg.model;
+            renderCanvas();
+            syncCompile();
+          }
+        });
+        customInp.addEventListener("input", () => {
+          cfg.model = customInp.value || "gpt-4.1-mini";
+          renderCanvas();
+          syncCompile();
+        });
+      }
+
+      const tempRange = document.getElementById("inspTempRange");
+      const tempValEl = document.getElementById("inspTempVal");
+      if (tempRange && tempValEl) {
+        tempRange.addEventListener("input", () => {
+          const num = Number(tempRange.value);
+          cfg.temperature = num;
+          tempValEl.textContent = num.toFixed(1);
+          syncCompile();
+        });
+      }
+
+      body.querySelectorAll(".var-insert-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const targetKey = btn.getAttribute("data-target-k");
+          const varName = btn.getAttribute("data-var");
+          const fieldEl = body.querySelector(`.insp-f[data-k="${CSS.escape(targetKey)}"]`);
+          if (!fieldEl) return;
+          const token = `{{${varName}}}`;
+          const start = fieldEl.selectionStart ?? fieldEl.value.length;
+          const end = fieldEl.selectionEnd ?? fieldEl.value.length;
+          fieldEl.value = fieldEl.value.slice(0, start) + token + fieldEl.value.slice(end);
+          cfg[targetKey] = fieldEl.value;
+          fieldEl.focus();
+          fieldEl.selectionStart = fieldEl.selectionEnd = start + token.length;
+          renderCanvas();
+          syncCompile();
+        });
+      });
 
       body.querySelectorAll(".insp-f").forEach(inp => {
         const evt = inp.tagName === "SELECT" ? "change" : "input";
@@ -1363,7 +1759,7 @@
         return `<div>
           <div class="side-cat-title">${esc(g.label)}</div>
           ${items.map(b => `
-            <button type="button" class="block-lib-item" data-type="${esc(b.type)}" title="${esc(b.desc)}">
+            <button type="button" class="block-lib-item" draggable="true" data-type="${esc(b.type)}" title="${esc(b.desc)} (click or drag to canvas)">
               <span class="block-lib-left">
                 <span class="cat-dot dot-${b.cat}"></span>
                 <span>${esc(b.title)}</span>
@@ -1378,6 +1774,19 @@
       lib.innerHTML = html || `<div style="padding:4px 8px;font-size:12px;color:var(--muted);">No matching blocks</div>`;
       lib.querySelectorAll(".block-lib-item").forEach(btn => {
         btn.addEventListener("click", () => insertBlock(btn.getAttribute("data-type")));
+        btn.addEventListener("dragstart", (e) => {
+          const bType = btn.getAttribute("data-type");
+          dragState.mode = "palette";
+          dragState.type = bType;
+          dragState.blockId = null;
+          btn.classList.add("is-dragging");
+          e.dataTransfer.effectAllowed = "copy";
+          e.dataTransfer.setData("text/plain", `palette:${bType}`);
+        });
+        btn.addEventListener("dragend", () => {
+          btn.classList.remove("is-dragging");
+          clearDragState();
+        });
       });
     }
 
@@ -1529,6 +1938,119 @@
     });
 
     // =========================================================================
+    // DRAG & DROP (SIDEBAR -> CANVAS/BRANCHES AND REORDERING EXISTING BLOCKS)
+    // =========================================================================
+    function clearDropIndicators() {
+      document.querySelectorAll(".drop-before, .drop-after, .drop-inside").forEach(el => {
+        el.classList.remove("drop-before", "drop-after", "drop-inside");
+      });
+    }
+
+    function clearDragState() {
+      clearDropIndicators();
+      document.querySelectorAll(".is-dragging").forEach(el => el.classList.remove("is-dragging"));
+      dragState.mode = null;
+      dragState.type = null;
+      dragState.blockId = null;
+    }
+
+    function resolveDropTarget(e) {
+      const targetRow = e.target.closest(".block-row");
+      const targetBranch = e.target.closest(".branch-drop-zone");
+
+      if (targetBranch && (!targetRow || targetRow.contains(targetBranch))) {
+        const parentId = targetBranch.getAttribute("data-drop-parent");
+        const branchKey = targetBranch.getAttribute("data-drop-branch");
+        if (dragState.mode === "move" && (dragState.blockId === parentId || isDescendant(dragState.blockId, parentId))) {
+          return null;
+        }
+        const list = getListForTarget(parentId, branchKey);
+        return { parentId, branchKey, index: list ? list.length : 0, el: targetBranch, cls: "drop-inside" };
+      }
+
+      if (targetRow) {
+        const rowId = targetRow.getAttribute("data-blk");
+        const parentId = targetRow.getAttribute("data-parent-id") || null;
+        const branchKey = targetRow.getAttribute("data-branch-key") || null;
+        const idx = Number(targetRow.getAttribute("data-index") || 0);
+        if (dragState.mode === "move") {
+          if (rowId === dragState.blockId) return null;
+          if (parentId && (dragState.blockId === parentId || isDescendant(dragState.blockId, parentId))) return null;
+        }
+        const rect = targetRow.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        return {
+          parentId,
+          branchKey,
+          index: after ? idx + 1 : idx,
+          el: targetRow,
+          cls: after ? "drop-after" : "drop-before"
+        };
+      }
+
+      return {
+        parentId: null,
+        branchKey: null,
+        index: state.workflow.blocks.length,
+        el: document.getElementById("canvasDropEnd"),
+        cls: "drop-inside"
+      };
+    }
+
+    const blockTreeEl = document.getElementById("blockTree");
+    const canvasScrollEl = document.getElementById("canvasScroll");
+
+    blockTreeEl.addEventListener("dragstart", (e) => {
+      if (e.target.closest("select, input, textarea, button.icon-btn, button.branch-target-btn, button.slash-prompt")) {
+        e.preventDefault();
+        return;
+      }
+      const row = e.target.closest(".block-row");
+      if (!row) return;
+      e.stopPropagation();
+      const id = row.getAttribute("data-blk");
+      dragState.mode = "move";
+      dragState.type = null;
+      dragState.blockId = id;
+      row.classList.add("is-dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", `move:${id}`);
+    });
+
+    blockTreeEl.addEventListener("dragend", () => {
+      clearDragState();
+    });
+
+    canvasScrollEl.addEventListener("dragover", (e) => {
+      if (!dragState.mode) return;
+      e.preventDefault();
+      const drop = resolveDropTarget(e);
+      clearDropIndicators();
+      if (!drop) {
+        e.dataTransfer.dropEffect = "none";
+        return;
+      }
+      e.dataTransfer.dropEffect = dragState.mode === "palette" ? "copy" : "move";
+      if (drop.el) drop.el.classList.add(drop.cls);
+    });
+
+    canvasScrollEl.addEventListener("dragleave", (e) => {
+      if (!canvasScrollEl.contains(e.relatedTarget)) {
+        clearDropIndicators();
+      }
+    });
+
+    canvasScrollEl.addEventListener("drop", (e) => {
+      if (!dragState.mode) return;
+      e.preventDefault();
+      const drop = resolveDropTarget(e);
+      if (drop) {
+        performDrop(drop.parentId, drop.branchKey, drop.index);
+      }
+      clearDragState();
+    });
+
+    // =========================================================================
     // HEADER / SIDEBAR / DRAWER / SIMULATION CONTROLS
     // =========================================================================
     document.getElementById("toggleSidebarBtn").addEventListener("click", () => {
@@ -1600,6 +2122,16 @@
 
     document.getElementById("propCheckpointer").addEventListener("change", (e) => {
       state.workflow.trigger.checkpointer = e.target.value;
+      syncCompile();
+    });
+
+    document.getElementById("propDefaultModel").addEventListener("change", (e) => {
+      state.defaultModel = e.target.value;
+    });
+
+    document.getElementById("applyDefaultModelBtn").addEventListener("click", () => {
+      applyModelToWorkflow(state.workflow.blocks, state.defaultModel);
+      renderAll();
       syncCompile();
     });
 

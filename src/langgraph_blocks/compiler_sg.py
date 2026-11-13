@@ -74,14 +74,49 @@ def _parse_extracted_json(raw: Any, fields_spec: str) -> dict[str, Any]:
     return {f: text for f in fields} if fields else {"raw": text}
 
 
-def _call_llm(llm_fn: Any, prompt: str, state: dict[str, Any], step_name: str, model: str) -> Any:
+def _call_llm(
+    llm_fn: Any,
+    prompt: str,
+    state: dict[str, Any],
+    step_name: str,
+    model: str,
+    *,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    system_prompt: str = "",
+) -> Any:
+    sys_text = _render(system_prompt, state) if system_prompt else ""
+    full_prompt = f"{sys_text}\\n\\n{prompt}" if sys_text else prompt
     if llm_fn is None:
-        return f"[{model}:{step_name}] {prompt[:120]}"
+        return f"[{model}:{step_name}] {full_prompt[:120]}"
     if hasattr(llm_fn, "invoke"):
-        res = llm_fn.invoke(prompt)
+        target = llm_fn
+        bind_kw = {}
+        if temperature is not None:
+            bind_kw["temperature"] = temperature
+        if max_tokens is not None:
+            bind_kw["max_tokens"] = max_tokens
+        if bind_kw and hasattr(llm_fn, "bind"):
+            try:
+                target = llm_fn.bind(**bind_kw)
+            except Exception:
+                target = llm_fn
+        res = target.invoke(full_prompt)
         return getattr(res, "content", res)
-    return llm_fn(prompt, state)
+    return llm_fn(full_prompt, state)
 '''.strip()
+
+
+def _llm_call_kwargs(cfg: dict[str, Any]) -> str:
+    """Format optional LLM generation kwargs for generated Python code."""
+    parts: list[str] = []
+    if cfg.get("temperature") not in (None, ""):
+        parts.append(f"temperature={float(cfg['temperature'])}")
+    if cfg.get("max_tokens") not in (None, ""):
+        parts.append(f"max_tokens={int(cfg['max_tokens'])}")
+    if str(cfg.get("system_prompt", "")).strip():
+        parts.append(f"system_prompt={str(cfg['system_prompt'])!r}")
+    return (", " + ", ".join(parts)) if parts else ""
 
 
 def _checkpointer_import(checkpointer: str) -> str:
@@ -140,11 +175,12 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "llm_output")))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
                 prompt = str(cfg.get("prompt", ""))
+                llm_kw = _llm_call_kwargs(cfg)
                 n = reg_node(
                     str(cfg.get("name", "ask_llm")),
                     [
                         f"        prompt = _render({prompt!r}, state)",
-                        f"        result = _call_llm(llm, prompt, state, {str(cfg.get('name', 'ask_llm'))!r}, {model!r})",
+                        f"        result = _call_llm(llm, prompt, state, {str(cfg.get('name', 'ask_llm'))!r}, {model!r}{llm_kw})",
                         f"        return {{{out_var!r}: result}}",
                     ],
                 )
@@ -155,11 +191,12 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 src_var = sanitize_identifier(str(cfg.get("source_var", wf.trigger.input_var)))
                 fields_spec = str(cfg.get("schema_fields", "summary: str"))
                 model = str(cfg.get("model", "gpt-4.1-mini"))
+                llm_kw = _llm_call_kwargs(cfg)
                 n = reg_node(
                     str(cfg.get("name", "extract_json")),
                     [
                         f"        prompt = 'Extract JSON fields (' + {fields_spec!r} + ') from: ' + str(state.get({src_var!r}, ''))",
-                        f"        raw = _call_llm(llm, prompt, state, 'extract_json', {model!r})",
+                        f"        raw = _call_llm(llm, prompt, state, 'extract_json', {model!r}{llm_kw})",
                         f"        return {{{out_var!r}: _parse_extracted_json(raw, {fields_spec!r})}}",
                     ],
                 )
@@ -171,6 +208,7 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 max_steps = max(1, int(cfg.get("max_steps", 5)))
                 prompt = str(cfg.get("prompt", ""))
                 model = str(cfg.get("model", "claude-sonnet"))
+                llm_kw = _llm_call_kwargs(cfg)
                 n = reg_node(
                     str(cfg.get("name", "agent_loop")),
                     [
@@ -178,7 +216,7 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                         "        if react_runner is not None:",
                         f"            result = react_runner(prompt=prompt, tools={tools_raw!r}, max_steps={max_steps}, state=state)",
                         "        else:",
-                        f"            result = _call_llm(llm, prompt, state, 'agent_loop', {model!r})",
+                        f"            result = _call_llm(llm, prompt, state, 'agent_loop', {model!r}{llm_kw})",
                         f"        return {{{out_var!r}: result}}",
                     ],
                 )
@@ -332,11 +370,12 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 label_a = str(cfg.get("label_a", "billing"))
                 label_b = str(cfg.get("label_b", "technical"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "route_choice")))
+                llm_kw = _llm_call_kwargs(cfg)
                 gate = reg_node(
                     "llm_router",
                     [
                         f"        prompt = _render({prompt!r}, state)",
-                        f"        raw = str(_call_llm(llm, prompt, state, 'llm_router', {model!r})).strip().lower()",
+                        f"        raw = str(_call_llm(llm, prompt, state, 'llm_router', {model!r}{llm_kw})).strip().lower()",
                         f"        if {label_a.lower()!r} in raw:",
                         f"            choice = {label_a!r}",
                         f"        elif {label_b.lower()!r} in raw:",
