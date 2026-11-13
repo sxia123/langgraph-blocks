@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from importlib import resources
 from typing import Any
 
 from .schema import BlockNode, WorkflowSchema, collect_state_vars, parse_workflow, sanitize_identifier
+
+
+def _load_http_helpers() -> str:
+    raw = resources.files(__package__).joinpath("_llm_http.py").read_text(encoding="utf-8")
+    return raw.replace("\r\n", "\n").split("# --- EMBED START ---\n", 1)[1].strip()
+
 
 _RUNTIME_HELPERS = '''
 def _render(template: str, state: dict[str, Any]) -> str:
@@ -72,15 +79,17 @@ def _parse_extracted_json(raw: Any, fields_spec: str) -> dict[str, Any]:
             pass
     fields = [part.split(":")[0].strip() for part in fields_spec.split(",") if part.strip()]
     return {f: text for f in fields} if fields else {"raw": text}
-
-
-def _call_llm(
+''' + "\n\n\n" + _load_http_helpers() + "\n\n\n" + '''def _call_llm(
     llm_fn: Any,
     prompt: str,
     state: dict[str, Any],
     step_name: str,
     model: str,
     *,
+    llm_mode: str = "api",
+    api_provider: str = "openai",
+    api_key_env: str = "",
+    endpoint_url: str = "",
     temperature: float | None = None,
     max_tokens: int | None = None,
     system_prompt: str = "",
@@ -88,7 +97,21 @@ def _call_llm(
     sys_text = _render(system_prompt, state) if system_prompt else ""
     full_prompt = f"{sys_text}\\n\\n{prompt}" if sys_text else prompt
     if llm_fn is None:
-        return f"[{model}:{step_name}] {full_prompt[:120]}"
+        http_res = _http_llm_call(
+            prompt,
+            model,
+            llm_mode=llm_mode,
+            api_provider=api_provider,
+            api_key_env=api_key_env,
+            endpoint_url=endpoint_url,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system_prompt=sys_text,
+        )
+        if http_res is not None:
+            return http_res
+        target_label = model or endpoint_url or api_provider or "llm"
+        return f"[{target_label}:{step_name}] {full_prompt[:120]}"
     if hasattr(llm_fn, "invoke"):
         target = llm_fn
         bind_kw = {}
@@ -108,8 +131,12 @@ def _call_llm(
 
 
 def _llm_call_kwargs(cfg: dict[str, Any]) -> str:
-    """Format optional LLM generation kwargs for generated Python code."""
+    """Format optional LLM connection and generation kwargs for generated Python code."""
     parts: list[str] = []
+    for key in ("llm_mode", "api_provider", "api_key_env", "endpoint_url"):
+        val = str(cfg.get(key, "") or "").strip()
+        if val:
+            parts.append(f"{key}={val!r}")
     if cfg.get("temperature") not in (None, ""):
         parts.append(f"temperature={float(cfg['temperature'])}")
     if cfg.get("max_tokens") not in (None, ""):
@@ -173,7 +200,7 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
 
             if blk.type == "ask_llm":
                 out_var = sanitize_identifier(str(cfg.get("output_var", "llm_output")))
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 prompt = str(cfg.get("prompt", ""))
                 llm_kw = _llm_call_kwargs(cfg)
                 n = reg_node(
@@ -190,7 +217,7 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "extracted")))
                 src_var = sanitize_identifier(str(cfg.get("source_var", wf.trigger.input_var)))
                 fields_spec = str(cfg.get("schema_fields", "summary: str"))
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 llm_kw = _llm_call_kwargs(cfg)
                 n = reg_node(
                     str(cfg.get("name", "extract_json")),
@@ -207,7 +234,7 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 tools_raw = [t.strip() for t in str(cfg.get("tools", "")).split(",") if t.strip()]
                 max_steps = max(1, int(cfg.get("max_steps", 5)))
                 prompt = str(cfg.get("prompt", ""))
-                model = str(cfg.get("model", "claude-sonnet"))
+                model = str(cfg.get("model", "") or "")
                 llm_kw = _llm_call_kwargs(cfg)
                 n = reg_node(
                     str(cfg.get("name", "agent_loop")),
@@ -365,7 +392,7 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 return gate, join
 
             if blk.type == "llm_router":
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 prompt = str(cfg.get("prompt", "Route {{user_query}}"))
                 label_a = str(cfg.get("label_a", "billing"))
                 label_b = str(cfg.get("label_b", "technical"))
@@ -625,7 +652,11 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
         f'"""Generated by langgraph-blocks (StateGraph target) for workflow: {wf.trigger.name}."""',
         "",
         "import json",
+        "import os",
         "import re",
+        "import urllib.error",
+        "import urllib.parse",
+        "import urllib.request",
         "from typing import Annotated, Any, Callable, TypedDict",
         "",
         "from langgraph.graph import END, START, StateGraph, add_messages",

@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Callable, TypedDict
 
+from ._llm_http import _http_llm_call
 from .schema import BlockNode, WorkflowSchema, collect_state_vars, parse_workflow, sanitize_identifier
 
 
@@ -98,9 +99,15 @@ def _route_choice_from_llm(
     return "fallback"
 
 
-def _llm_opts_from_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Extract optional model generation settings cleanly from block config."""
+def _llm_opts_from_cfg(cfg: dict[str, Any], *, api_key: str = "") -> dict[str, Any]:
+    """Extract optional LLM connection and generation settings cleanly from block config."""
     opts: dict[str, Any] = {}
+    for key in ("llm_mode", "api_provider", "api_key_env", "endpoint_url"):
+        val = str(cfg.get(key, "") or "").strip()
+        if val:
+            opts[key] = val
+    if api_key:
+        opts["api_key"] = api_key
     if cfg.get("temperature") not in (None, ""):
         opts["temperature"] = float(cfg["temperature"])
     if cfg.get("max_tokens") not in (None, ""):
@@ -171,6 +178,12 @@ def _invoke_llm(
     step_name: str,
     model: str,
     *,
+    llm_mode: str = "api",
+    api_provider: str = "openai",
+    api_key_env: str = "",
+    endpoint_url: str = "",
+    api_key: str = "",
+    offline_fallback: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
     system_prompt: str = "",
@@ -178,6 +191,22 @@ def _invoke_llm(
     sys_text = render_template(system_prompt, state) if system_prompt else ""
     full_prompt = f"{sys_text}\n\n{prompt}" if sys_text else prompt
     if llm is None:
+        http_res = _http_llm_call(
+            prompt,
+            model,
+            llm_mode=llm_mode,
+            api_provider=api_provider,
+            api_key_env=api_key_env,
+            endpoint_url=endpoint_url,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system_prompt=sys_text,
+        )
+        if http_res is not None:
+            return http_res
+        if offline_fallback is not None:
+            return offline_fallback
         if "classify" in step_name.lower() or "intent" in step_name.lower():
             q = str(state.get("user_query", "")).lower()
             return "refund" if "refund" in q else "general"
@@ -186,7 +215,8 @@ def _invoke_llm(
             next_score = cur + 2
             state["_sim_score"] = next_score
             return next_score
-        return f"[{model}:{step_name}] Generated response for: {full_prompt[:80]}"
+        target_label = model or endpoint_url or api_provider or "llm"
+        return f"[{target_label}:{step_name}] Generated response for: {full_prompt[:80]}"
     if hasattr(llm, "invoke"):
         target = llm
         bind_kw: dict[str, Any] = {}
@@ -219,6 +249,7 @@ def build_state_graph(
     workflow: WorkflowSchema | dict[str, Any],
     *,
     llm: Any | None = None,
+    api_key: str = "",
     tools: dict[str, Callable[..., Any]] | None = None,
     react_runner: Callable[..., Any] | None = None,
     checkpointer: Any | None = None,
@@ -273,9 +304,9 @@ def build_state_graph(
             if blk.type == "ask_llm":
                 step_name = str(cfg.get("name", "ask_llm"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "llm_output")))
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 prompt_tpl = str(cfg.get("prompt", ""))
-                opts = _llm_opts_from_cfg(cfg)
+                opts = _llm_opts_from_cfg(cfg, api_key=api_key)
 
                 def node_fn(s: dict[str, Any]) -> dict[str, Any]:
                     prompt = render_template(prompt_tpl, s)
@@ -289,8 +320,8 @@ def build_state_graph(
                 out_var = sanitize_identifier(str(cfg.get("output_var", "extracted")))
                 src_var = sanitize_identifier(str(cfg.get("source_var", wf.trigger.input_var)))
                 fields_spec = str(cfg.get("schema_fields", "summary: str"))
-                model = str(cfg.get("model", "gpt-4.1-mini"))
-                opts = _llm_opts_from_cfg(cfg)
+                model = str(cfg.get("model", "") or "")
+                opts = _llm_opts_from_cfg(cfg, api_key=api_key)
 
                 def node_fn(s: dict[str, Any]) -> dict[str, Any]:
                     prompt = f"Extract JSON fields ({fields_spec}) from: {s.get(src_var, '')}"
@@ -306,8 +337,8 @@ def build_state_graph(
                 tools_list = [t.strip() for t in str(cfg.get("tools", "")).split(",") if t.strip()]
                 max_steps = max(1, int(cfg.get("max_steps", 5)))
                 prompt_tpl = str(cfg.get("prompt", ""))
-                model = str(cfg.get("model", "claude-sonnet"))
-                opts = _llm_opts_from_cfg(cfg)
+                model = str(cfg.get("model", "") or "")
+                opts = _llm_opts_from_cfg(cfg, api_key=api_key)
 
                 def node_fn(s: dict[str, Any]) -> dict[str, Any]:
                     prompt = render_template(prompt_tpl, s)
@@ -422,12 +453,12 @@ def build_state_graph(
                 return gate, join
 
             if blk.type == "llm_router":
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 prompt_tpl = str(cfg.get("prompt", "Route {{user_query}}"))
                 label_a = str(cfg.get("label_a", "billing"))
                 label_b = str(cfg.get("label_b", "technical"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "route_choice")))
-                opts = _llm_opts_from_cfg(cfg)
+                opts = _llm_opts_from_cfg(cfg, api_key=api_key)
 
                 def route_fn(s: dict[str, Any]) -> dict[str, Any]:
                     choice = _route_choice_from_llm(
@@ -669,6 +700,7 @@ class _PausedExecution:
     llm: Any | None
     tools: dict[str, Callable[..., Any]]
     react_runner: Callable[..., Any] | None
+    api_key: str = ""
 
 
 class WorkflowRunner:
@@ -683,6 +715,7 @@ class WorkflowRunner:
         input_data: dict[str, Any] | str,
         *,
         llm: Any | None = None,
+        api_key: str = "",
         tools: dict[str, Callable[..., Any]] | None = None,
         react_runner: Callable[..., Any] | None = None,
     ) -> RunResult:
@@ -704,7 +737,9 @@ class WorkflowRunner:
             )
         ]
         frames: list[tuple[list[BlockNode], int]] = [(list(wf.blocks), 0)]
-        return self._drive(wf, state, trace, frames, llm=llm, tools=tools or {}, react_runner=react_runner)
+        return self._drive(
+            wf, state, trace, frames, llm=llm, tools=tools or {}, react_runner=react_runner, api_key=api_key
+        )
 
     def resume(self, resume_token: str, decision: bool | dict[str, Any]) -> RunResult:
         paused = self._paused.pop(resume_token, None)
@@ -734,6 +769,7 @@ class WorkflowRunner:
             llm=paused.llm,
             tools=paused.tools,
             react_runner=paused.react_runner,
+            api_key=paused.api_key,
         )
 
     def _drive(
@@ -746,6 +782,7 @@ class WorkflowRunner:
         llm: Any | None,
         tools: dict[str, Callable[..., Any]],
         react_runner: Callable[..., Any] | None,
+        api_key: str = "",
         emit_end: bool = True,
     ) -> RunResult:
         while frames:
@@ -761,9 +798,9 @@ class WorkflowRunner:
             if blk.type == "ask_llm":
                 step_name = str(cfg.get("name", "ask_llm"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "llm_output")))
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 prompt = render_template(str(cfg.get("prompt", "")), state)
-                val = _invoke_llm(llm, prompt, state, step_name, model, **_llm_opts_from_cfg(cfg))
+                val = _invoke_llm(llm, prompt, state, step_name, model, **_llm_opts_from_cfg(cfg, api_key=api_key))
                 state[out_var] = val
                 trace.append(TraceEvent(blk.id, blk.type, f"Ask LLM ({step_name})", f"Set {out_var} = {val!r}"))
 
@@ -772,9 +809,9 @@ class WorkflowRunner:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "extracted")))
                 src_var = sanitize_identifier(str(cfg.get("source_var", wf.trigger.input_var)))
                 fields_spec = str(cfg.get("schema_fields", "summary: str"))
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 prompt = f"Extract JSON fields ({fields_spec}) from: {state.get(src_var, '')}"
-                raw = _invoke_llm(llm, prompt, state, "extract_json", model, **_llm_opts_from_cfg(cfg))
+                raw = _invoke_llm(llm, prompt, state, "extract_json", model, **_llm_opts_from_cfg(cfg, api_key=api_key))
                 val = parse_extracted_json(raw, fields_spec)
                 state[out_var] = val
                 trace.append(TraceEvent(blk.id, blk.type, f"Extract JSON ({step_name})", f"Parsed into {out_var}"))
@@ -784,14 +821,21 @@ class WorkflowRunner:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "agent_draft")))
                 max_steps = max(1, int(cfg.get("max_steps", 5)))
                 tools_list = [t.strip() for t in str(cfg.get("tools", "")).split(",") if t.strip()]
-                model = str(cfg.get("model", "claude-sonnet"))
+                model = str(cfg.get("model", "") or "")
                 prompt = render_template(str(cfg.get("prompt", "")), state)
                 if react_runner is not None:
                     val = react_runner(prompt=prompt, tools=tools_list, max_steps=max_steps, state=state)
-                elif llm is not None:
-                    val = _invoke_llm(llm, prompt, state, step_name, model, **_llm_opts_from_cfg(cfg))
                 else:
-                    val = f"[{model}:{step_name}] Tool-grounded answer using {tools_list} (max_steps={max_steps})"
+                    target_label = model or str(cfg.get("endpoint_url", "") or cfg.get("api_provider", "") or "llm")
+                    val = _invoke_llm(
+                        llm,
+                        prompt,
+                        state,
+                        step_name,
+                        model,
+                        offline_fallback=f"[{target_label}:{step_name}] Tool-grounded answer using {tools_list} (max_steps={max_steps})",
+                        **_llm_opts_from_cfg(cfg, api_key=api_key),
+                    )
                 state[out_var] = val
                 trace.append(TraceEvent(blk.id, blk.type, f"Agent Loop ({step_name})", f"Set {out_var}"))
 
@@ -869,13 +913,13 @@ class WorkflowRunner:
                     frames.append((list(branch), 0))
 
             elif blk.type == "llm_router":
-                model = str(cfg.get("model", "gpt-4.1-mini"))
+                model = str(cfg.get("model", "") or "")
                 prompt = render_template(str(cfg.get("prompt", "Route {{user_query}}")), state)
                 label_a = str(cfg.get("label_a", "billing"))
                 label_b = str(cfg.get("label_b", "technical"))
                 out_var = sanitize_identifier(str(cfg.get("output_var", "route_choice")))
                 choice = _route_choice_from_llm(
-                    llm, prompt, state, model, label_a, label_b, **_llm_opts_from_cfg(cfg)
+                    llm, prompt, state, model, label_a, label_b, **_llm_opts_from_cfg(cfg, api_key=api_key)
                 )
                 state[out_var] = choice
                 branch_key = "route_a" if choice == label_a else ("route_b" if choice == label_b else "fallback")
@@ -977,6 +1021,7 @@ class WorkflowRunner:
                         llm=llm,
                         tools=tools,
                         react_runner=react_runner,
+                        api_key=api_key,
                         emit_end=False,
                     )
                     return sub_state, sub_trace
@@ -1015,6 +1060,7 @@ class WorkflowRunner:
                         llm=llm,
                         tools=tools,
                         react_runner=react_runner,
+                        api_key=api_key,
                         emit_end=False,
                     )
                     if sub_res.status == "paused":
@@ -1052,6 +1098,7 @@ class WorkflowRunner:
                     llm=llm,
                     tools=tools,
                     react_runner=react_runner,
+                    api_key=api_key,
                 )
                 return RunResult(
                     status="paused",

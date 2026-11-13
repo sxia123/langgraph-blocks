@@ -44,7 +44,10 @@ def test_studio_http_server_endpoints() -> None:
         base = f"http://127.0.0.1:{port}"
         with urllib.request.urlopen(f"{base}/") as resp:
             assert resp.status == 200
-            assert "LangGraph Blocks Studio" in resp.read().decode("utf-8")
+            html = resp.read().decode("utf-8")
+            assert "LangGraph Blocks Studio" in html
+            assert "MODEL_GROUPS" not in html
+            assert "custom_endpoint" in html
 
         with urllib.request.urlopen(f"{base}/api/examples") as resp:
             examples = json.loads(resp.read().decode("utf-8"))["examples"]
@@ -114,3 +117,69 @@ def test_studio_server_fallback_skips_busy_and_reserved_ports() -> None:
         blocker.shutdown()
         blocker.server_close()
         blocker_thread.join(timeout=2)
+
+
+def test_studio_simulate_passes_transient_api_key() -> None:
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    seen_auth: list[str] = []
+
+    class EpHandler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen_auth.append(self.headers.get("Authorization", ""))
+            raw = json.dumps({"choices": [{"message": {"content": "SIM_KEY_OK"}}]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format, *args):
+            pass
+
+    ep_srv = HTTPServer(("127.0.0.1", 0), EpHandler)
+    ep_port = ep_srv.server_address[1]
+    ep_thread = threading.Thread(target=ep_srv.serve_forever, daemon=True)
+    ep_thread.start()
+
+    studio_srv = create_studio_server(host="127.0.0.1", port=0)
+    studio_port = studio_srv.server_address[1]
+    studio_thread = threading.Thread(target=studio_srv.serve_forever, daemon=True)
+    studio_thread.start()
+
+    try:
+        wf = {
+            "trigger": {"name": "studio_ep", "input_var": "user_query", "checkpointer": "MemorySaver"},
+            "blocks": [
+                {
+                    "id": "a1",
+                    "type": "ask_llm",
+                    "config": {
+                        "name": "ask",
+                        "llm_mode": "custom_endpoint",
+                        "endpoint_url": f"http://127.0.0.1:{ep_port}/v1",
+                        "model": "ep-model",
+                        "prompt": "{{user_query}}",
+                        "output_var": "ans",
+                    },
+                }
+            ],
+        }
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{studio_port}/api/simulate",
+            data=json.dumps({"workflow": wf, "input": "ping", "api_key": "transient-token"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req) as resp:
+            out = json.loads(resp.read().decode("utf-8"))
+            assert out["status"] == "done"
+            assert out["state"]["ans"] == "SIM_KEY_OK"
+            assert seen_auth == ["Bearer transient-token"]
+    finally:
+        studio_srv.shutdown()
+        studio_srv.server_close()
+        studio_thread.join(timeout=2)
+        ep_srv.shutdown()
+        ep_srv.server_close()
+        ep_thread.join(timeout=2)

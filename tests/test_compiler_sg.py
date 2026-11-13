@@ -224,3 +224,69 @@ def test_generated_stategraph_passes_model_temperature_max_tokens_and_system_pro
     out = graph.invoke({"user_query": "LangGraph"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
     assert out["draft"].startswith("BOUND(0.4,512)::Be concise for LangGraph")
     assert "Draft answer" in out["draft"]
+
+
+def test_generated_stategraph_calls_custom_endpoint_live() -> None:
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    received: list[dict] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+            received.append({"path": self.path, "body": body})
+            resp = {"choices": [{"message": {"content": "ENDPOINT_SG_OK"}}]}
+            raw = json.dumps(resp).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format, *args):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Handler)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    try:
+        wf = {
+            "trigger": {"name": "custom_ep_sg", "input_var": "user_query", "checkpointer": "MemorySaver"},
+            "blocks": [
+                {
+                    "id": "ask_ep",
+                    "type": "ask_llm",
+                    "config": {
+                        "name": "ep_step",
+                        "llm_mode": "custom_endpoint",
+                        "endpoint_url": f"http://127.0.0.1:{port}/v1",
+                        "model": "local-llama3",
+                        "system_prompt": "Sys {{user_query}}",
+                        "prompt": "Ping {{user_query}}",
+                        "output_var": "reply",
+                    },
+                }
+            ],
+        }
+        code = compile_to_state_graph(wf)
+        assert "llm_mode='custom_endpoint'" in code
+        assert f"endpoint_url='http://127.0.0.1:{port}/v1'" in code
+        build_workflow = _load_compiled_graph(code)
+        graph = build_workflow(llm=None)
+        out = graph.invoke({"user_query": "hello"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+        assert out["reply"] == "ENDPOINT_SG_OK"
+        assert received and received[0]["path"] == "/v1/chat/completions"
+        assert received[0]["body"]["model"] == "local-llama3"
+        assert received[0]["body"]["messages"] == [
+            {"role": "system", "content": "Sys hello"},
+            {"role": "user", "content": "Ping hello"},
+        ]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+        t.join(timeout=2)

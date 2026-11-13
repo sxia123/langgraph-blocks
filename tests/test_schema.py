@@ -171,3 +171,59 @@ def test_expanded_18_block_catalog_validation_and_state_vars() -> None:
     ai_err = " | ".join(ai_exc.value.errors)
     assert "temperature must be between 0.0 and 2.0" in ai_err
     assert "max_tokens must be >= 1" in ai_err
+
+
+def test_llm_connection_mode_validation() -> None:
+    valid_wf = {
+        "trigger": {"name": "conn_ok", "input_var": "q", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "a1",
+                "type": "ask_llm",
+                "config": {
+                    "llmMode": "api",
+                    "apiProvider": "anthropic",
+                    "apiKeyEnv": "MY_ANTHROPIC_KEY",
+                    "model": "custom-model-v1",
+                    "prompt": "{{q}}",
+                    "output_var": "r1",
+                },
+            },
+            {
+                "id": "a2",
+                "type": "ask_llm",
+                "config": {
+                    "llm_mode": "custom_endpoint",
+                    "endpoint_url": "http://localhost:11434/v1",
+                    "model": "llama3.2",
+                    "prompt": "{{r1}}",
+                    "output_var": "r2",
+                },
+            },
+        ],
+    }
+    parsed = parse_workflow(valid_wf)
+    assert parsed.blocks[0].config["llm_mode"] == "api"
+    assert parsed.blocks[0].config["api_provider"] == "anthropic"
+    assert parsed.blocks[1].config["endpoint_url"] == "http://localhost:11434/v1"
+
+    bad_conn = {
+        "trigger": {"name": "conn_bad", "input_var": "q", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "bad1",
+                "type": "ask_llm",
+                "config": {
+                    "llm_mode": "managed_preset",
+                    "api_provider": "unknown_prov",
+                    "endpoint_url": "ftp://invalid-endpoint",
+                },
+            }
+        ],
+    }
+    with pytest.raises(ValidationError) as exc_info:
+        parse_workflow(bad_conn)
+    err = " | ".join(exc_info.value.errors)
+    assert "llm_mode must be 'api' or 'custom_endpoint'" in err
+    assert "unsupported api_provider" in err
+    assert "endpoint_url must start with 'http://' or 'https://'" in err

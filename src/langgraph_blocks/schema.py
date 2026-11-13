@@ -10,6 +10,8 @@ from typing import Any
 ALLOWED_CHECKPOINTERS = frozenset({"MemorySaver", "PostgresSaver", "SqliteSaver"})
 ALLOWED_OPERATORS = frozenset({"==", "!=", ">=", ">", "<=", "<", "in"})
 ALLOWED_GUARDRAIL_RULES = frozenset({"not_empty", "no_pii", "max_length", "regex"})
+ALLOWED_LLM_MODES = frozenset({"api", "custom_endpoint"})
+ALLOWED_API_PROVIDERS = frozenset({"openai", "anthropic", "gemini"})
 
 CONTAINER_BRANCHES: dict[str, tuple[str, ...]] = {
     "if_else": ("then", "else"),
@@ -70,6 +72,10 @@ _CAMEL_TO_SNAKE = {
     "argExpr": "arg_expr",
     "systemPrompt": "system_prompt",
     "maxTokens": "max_tokens",
+    "llmMode": "llm_mode",
+    "apiProvider": "api_provider",
+    "apiKeyEnv": "api_key_env",
+    "endpointUrl": "endpoint_url",
 }
 
 
@@ -290,6 +296,23 @@ def validate_workflow(workflow: WorkflowSchema) -> list[str]:
                     errors.append(f"{loc}: unsupported guardrail rule_type '{rule_type}'.")
 
             if node.type in {"ask_llm", "extract_json", "agent_loop", "llm_router"}:
+                llm_mode = str(node.config.get("llm_mode", "api") or "api")
+                if llm_mode not in ALLOWED_LLM_MODES:
+                    errors.append(
+                        f"{loc}: llm_mode must be 'api' or 'custom_endpoint' (got '{llm_mode}')."
+                    )
+                api_provider = str(node.config.get("api_provider", "") or "")
+                if api_provider and api_provider not in ALLOWED_API_PROVIDERS:
+                    errors.append(
+                        f"{loc}: unsupported api_provider '{api_provider}'."
+                    )
+                endpoint_url = str(node.config.get("endpoint_url", "") or "").strip()
+                if endpoint_url and not (
+                    endpoint_url.startswith("http://") or endpoint_url.startswith("https://")
+                ):
+                    errors.append(
+                        f"{loc}: endpoint_url must start with 'http://' or 'https://'."
+                    )
                 if "temperature" in node.config and node.config["temperature"] not in (None, ""):
                     try:
                         temp_val = float(node.config["temperature"])

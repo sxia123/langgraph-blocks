@@ -1033,10 +1033,21 @@
             </select>
           </div>
 
-          <div class="prop-label">Default AI model</div>
-          <div class="prop-value" style="gap:8px;flex-wrap:wrap;">
-            <select id="propDefaultModel" class="prop-inline-select"></select>
-            <button id="applyDefaultModelBtn" type="button" class="target-reset-btn" style="border:1px solid var(--border);padding:2px 7px;" title="Set all AI blocks in this workflow to the selected model">Apply to all AI blocks</button>
+          <div class="prop-label">Default LLM</div>
+          <div class="prop-value" style="gap:6px;flex-wrap:wrap;">
+            <select id="propLlmMode" class="prop-inline-select" title="Default LLM connection mode (API or Custom Endpoint only)">
+              <option value="api">API</option>
+              <option value="custom_endpoint">Custom Endpoint</option>
+            </select>
+            <select id="propApiProvider" class="prop-inline-select" title="API protocol">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="gemini">Gemini</option>
+            </select>
+            <input id="propEndpointUrl" class="prop-inline-input hidden" style="border-color:var(--border);min-width:190px;" type="text" placeholder="http://localhost:11434/v1" />
+            <input id="propApiKeyEnv" class="prop-inline-input" style="border-color:var(--border);max-width:155px;" type="text" placeholder="OPENAI_API_KEY" />
+            <input id="propDefaultModel" class="prop-inline-input" style="border-color:var(--border);max-width:165px;" type="text" placeholder="Model ID (e.g. gpt-4o)" />
+            <button id="applyDefaultLlmBtn" type="button" class="target-reset-btn" style="border:1px solid var(--border);padding:2px 7px;" title="Apply this LLM connection to all AI blocks in the workflow">Apply to all AI blocks</button>
           </div>
         </div>
 
@@ -1097,6 +1108,10 @@
           <label for="simInput">Test Input (user_query)</label>
           <input id="simInput" class="n-input" type="text" value="I was charged twice on order #8492, please refund $49." />
         </div>
+        <div class="field">
+          <label for="simApiKey">Runtime API Key <span style="font-weight:400;color:var(--muted);">(optional, session-only — not saved)</span></label>
+          <input id="simApiKey" class="n-input" type="password" placeholder="Uses API Key Env Var or offline mock if blank" autocomplete="off" />
+        </div>
         <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;">Execution Steps</div>
         <div id="traceSteps" style="margin-bottom:14px;"></div>
         <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;">Thread State</div>
@@ -1120,18 +1135,20 @@
       { id: "tools", label: "Tools & I/O" }
     ];
 
-    const MODEL_GROUPS = [
-      { provider: "OpenAI", models: ["gpt-4.1-mini", "gpt-4.1", "gpt-4o", "o4-mini"] },
-      { provider: "Anthropic", models: ["claude-sonnet-4-5", "claude-opus-4-1", "claude-haiku-3-5"] },
-      { provider: "Google Gemini", models: ["gemini-2.5-pro", "gemini-2.5-flash"] },
-      { provider: "Open Weights", models: ["llama-3.3-70b", "qwen-2.5-72b", "deepseek-r1"] }
-    ];
-    const PRESET_MODEL_SET = new Set(MODEL_GROUPS.flatMap(g => g.models));
+    const PROVIDER_DEFAULT_ENV = {
+      openai: "OPENAI_API_KEY",
+      anthropic: "ANTHROPIC_API_KEY",
+      gemini: "GEMINI_API_KEY"
+    };
     const AI_BLOCK_TYPES = new Set(["ask_llm", "extract_json", "agent_loop", "llm_router"]);
 
     const FIELD_LABELS = {
       name: "Step Name",
-      model: "AI Model",
+      llm_mode: "Connection Mode",
+      api_provider: "API Provider",
+      api_key_env: "API Key Env Var",
+      endpoint_url: "Endpoint URL",
+      model: "Model ID",
       temperature: "Temperature",
       max_tokens: "Max Tokens",
       system_prompt: "System Prompt",
@@ -1178,7 +1195,13 @@
     const state = {
       activeDocKey: "blank",
       pageTitle: "Untitled workflow",
-      defaultModel: "gpt-4.1-mini",
+      defaultLlm: {
+        llm_mode: "api",
+        api_provider: "openai",
+        api_key_env: "OPENAI_API_KEY",
+        endpoint_url: "",
+        model: ""
+      },
       workflow: {
         version: "0.1",
         trigger: { name: "untitled_workflow", input_var: "user_query", checkpointer: "MemorySaver" },
@@ -1199,16 +1222,16 @@
     const dragState = { mode: null, type: null, blockId: null };
 
     const BLOCK_DEFS = [
-      { type: "ask_llm", title: "Ask LLM", desc: "Prompt a model and save text or structured output", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "llm_step", model: state.defaultModel, temperature: 0.2, max_tokens: 1024, system_prompt: "", output_format: "structured", context_mode: "thread_messages", output_var: "llm_result", prompt: "Analyze {{user_query}}." }) },
-      { type: "extract_json", title: "Extract JSON", desc: "Extract typed JSON schema fields via LLM", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "extract_json", model: state.defaultModel, temperature: 0.0, max_tokens: 1024, system_prompt: "", source_var: "user_query", schema_fields: "intent: str, urgency: str", output_var: "extracted" }) },
-      { type: "agent_loop", title: "Agent Tool Loop", desc: "Bounded ReAct loop with tool access", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "agent_step", model: state.defaultModel, temperature: 0.2, max_tokens: 2048, system_prompt: "", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} using available tools." }) },
+      { type: "ask_llm", title: "Ask LLM", desc: "Prompt a model and save text or structured output", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "llm_step", ...state.defaultLlm, temperature: 0.2, max_tokens: 1024, system_prompt: "", output_format: "structured", context_mode: "thread_messages", output_var: "llm_result", prompt: "Analyze {{user_query}}." }) },
+      { type: "extract_json", title: "Extract JSON", desc: "Extract typed JSON schema fields via LLM", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "extract_json", ...state.defaultLlm, temperature: 0.0, max_tokens: 1024, system_prompt: "", source_var: "user_query", schema_fields: "intent: str, urgency: str", output_var: "extracted" }) },
+      { type: "agent_loop", title: "Agent Tool Loop", desc: "Bounded ReAct loop with tool access", group: "cognitive", cat: "cognitive", container: false, defaults: () => ({ name: "agent_step", ...state.defaultLlm, temperature: 0.2, max_tokens: 2048, system_prompt: "", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} using available tools." }) },
 
       { type: "rag_retrieve", title: "RAG Retrieve", desc: "Query a knowledge base collection for top-K docs", group: "memory", cat: "memory", container: false, defaults: () => ({ collection: "support_kb", query_expr: "{{user_query}}", top_k: 3, output_var: "retrieved_docs" }) },
       { type: "set_state", title: "Set State", desc: "Assign or compute a workflow state variable", group: "memory", cat: "memory", container: false, defaults: () => ({ target_var: "status", value_expr: "triaged" }) },
       { type: "append_memory", title: "Append Memory", desc: "Append a role/content message to thread history", group: "memory", cat: "memory", container: false, defaults: () => ({ role: "assistant", content_expr: "{{final_response}}", target_var: "messages" }) },
 
       { type: "if_else", title: "If / Else", desc: "Branch execution on a state variable condition", group: "control", cat: "control", container: true, branches: [["then", "If true"], ["else", "Else"]], defaults: () => ({ left_var: "intent", operator: "==", right_val: "refund" }) },
-      { type: "llm_router", title: "LLM Router", desc: "Semantic 3-way routing via LLM classifier", group: "control", cat: "control", container: true, branches: [["route_a", "Route A"], ["route_b", "Route B"], ["fallback", "Fallback"]], defaults: () => ({ model: state.defaultModel, temperature: 0.0, max_tokens: 256, system_prompt: "", label_a: "billing", label_b: "technical", output_var: "route_choice", prompt: "Classify {{user_query}} as billing or technical." }) },
+      { type: "llm_router", title: "LLM Router", desc: "Semantic 3-way routing via LLM classifier", group: "control", cat: "control", container: true, branches: [["route_a", "Route A"], ["route_b", "Route B"], ["fallback", "Fallback"]], defaults: () => ({ ...state.defaultLlm, temperature: 0.0, max_tokens: 256, system_prompt: "", label_a: "billing", label_b: "technical", output_var: "route_choice", prompt: "Classify {{user_query}} as billing or technical." }) },
       { type: "repeat_until", title: "Repeat Until", desc: "Bounded critique/retry loop with max iterations", group: "control", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ condition_var: "quality_score", operator: ">=", target_val: "8", max_iterations: 3 }) },
       { type: "for_each", title: "For Each", desc: "Iterate over a list state variable item by item", group: "control", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ list_var: "items", item_var: "current_item", max_items: 10 }) },
       { type: "parallel", title: "Parallel", desc: "Run two branches concurrently and join into State", group: "control", cat: "control", container: true, branches: [["laneA", "Branch A"], ["laneB", "Branch B"]], defaults: () => ({ label: "Parallel stage" }) },
@@ -1229,21 +1252,49 @@
 
     let presets = {};
 
-    function renderModelOptionsHtml(currentModel, includeCustomOption = false) {
-      const val = String(currentModel || "gpt-4.1-mini");
-      let html = "";
-      if (val && !PRESET_MODEL_SET.has(val)) {
-        html += `<option value="${esc(val)}" selected>${esc(val)} (custom)</option>`;
+    function normalizeLlmConfig(cfg) {
+      const mode = cfg?.llm_mode === "custom_endpoint" ? "custom_endpoint" : "api";
+      const model = String(cfg?.model ?? "");
+      let provider = ["openai", "anthropic", "gemini"].includes(cfg?.api_provider) ? cfg.api_provider : "";
+      if (!provider) {
+        if (model.startsWith("claude")) provider = "anthropic";
+        else if (model.startsWith("gemini")) provider = "gemini";
+        else provider = "openai";
       }
-      html += MODEL_GROUPS.map(g =>
-        `<optgroup label="${esc(g.provider)}">${g.models.map(m =>
-          `<option value="${esc(m)}" ${m === val ? "selected" : ""}>${esc(m)}</option>`
-        ).join("")}</optgroup>`
-      ).join("");
-      if (includeCustomOption) {
-        html += `<option value="__custom__">Custom model...</option>`;
+      const hasExplicitEnv = cfg && Object.prototype.hasOwnProperty.call(cfg, "api_key_env");
+      const env = hasExplicitEnv ? String(cfg.api_key_env ?? "") : (mode === "api" ? PROVIDER_DEFAULT_ENV[provider] : "");
+      return {
+        llm_mode: mode,
+        api_provider: provider,
+        api_key_env: env,
+        endpoint_url: String(cfg?.endpoint_url ?? ""),
+        model
+      };
+    }
+
+    function shortEndpointHost(url) {
+      const raw = String(url || "").trim();
+      if (!raw) return "set endpoint url";
+      try {
+        return new URL(raw).host || raw;
+      } catch {
+        return raw.replace(/^https?:\/\//i, "").split("/")[0] || raw;
       }
-      return html;
+    }
+
+    function renderDefaultLlmProps() {
+      const d = state.defaultLlm;
+      const isEndpoint = d.llm_mode === "custom_endpoint";
+      document.getElementById("propLlmMode").value = d.llm_mode;
+      document.getElementById("propApiProvider").value = d.api_provider;
+      document.getElementById("propApiProvider").classList.toggle("hidden", isEndpoint);
+      document.getElementById("propEndpointUrl").classList.toggle("hidden", !isEndpoint);
+      document.getElementById("propEndpointUrl").value = d.endpoint_url;
+      document.getElementById("propApiKeyEnv").value = d.api_key_env;
+      document.getElementById("propApiKeyEnv").placeholder = isEndpoint
+        ? "Optional key env var"
+        : (PROVIDER_DEFAULT_ENV[d.api_provider] || "API_KEY");
+      document.getElementById("propDefaultModel").value = d.model;
     }
 
     function esc(v) {
@@ -1336,14 +1387,14 @@
       return false;
     }
 
-    function applyModelToWorkflow(blocks, model) {
+    function applyLlmToWorkflow(blocks, llmDefaults) {
       for (const blk of blocks) {
         if (AI_BLOCK_TYPES.has(blk.type)) {
-          blk.config.model = model;
+          Object.assign(blk.config, { ...llmDefaults });
         }
         if (blk.branches) {
           for (const k of Object.keys(blk.branches)) {
-            applyModelToWorkflow(blk.branches[k], model);
+            applyLlmToWorkflow(blk.branches[k], llmDefaults);
           }
         }
       }
@@ -1420,22 +1471,30 @@
       syncCompile();
     }
 
-    function inlineModelChip(blk) {
-      return `<select class="inline-chip-select inline-model-sel" data-blk-id="${esc(blk.id)}" title="Switch AI model">
-        ${renderModelOptionsHtml(blk.config.model || state.defaultModel, false)}
-      </select>`;
+    function inlineLlmChip(blk) {
+      const conn = normalizeLlmConfig(blk.config);
+      const targetLabel = conn.llm_mode === "custom_endpoint"
+        ? `${shortEndpointHost(conn.endpoint_url)}${conn.model ? " · " + conn.model : ""}`
+        : `${conn.api_provider}${conn.model ? " · " + conn.model : ""}`;
+      const chipHint = conn.llm_mode === "custom_endpoint"
+        ? (conn.endpoint_url || "Configure custom endpoint URL in Inspector")
+        : `API key env: ${conn.api_key_env || PROVIDER_DEFAULT_ENV[conn.api_provider] || "unset"}`;
+      return `<select class="inline-chip-select inline-mode-sel" data-blk-id="${esc(blk.id)}" title="Connection mode (API or Custom Endpoint only)">
+        <option value="api" ${conn.llm_mode === "api" ? "selected" : ""}>API</option>
+        <option value="custom_endpoint" ${conn.llm_mode === "custom_endpoint" ? "selected" : ""}>Custom Endpoint</option>
+      </select> <span class="var-chip" title="${esc(chipHint)}">${esc(targetLabel)}</span>`;
     }
 
     function summarize(blk) {
       const c = blk.config;
-      if (blk.type === "ask_llm") return `${esc(c.name)} · ${inlineModelChip(blk)} → <span class="var-chip">${esc(c.output_var)}</span>`;
-      if (blk.type === "extract_json") return `${inlineModelChip(blk)} · (${esc(c.schema_fields)}) from <span class="var-chip">${esc(c.source_var)}</span> → <span class="var-chip">${esc(c.output_var)}</span>`;
-      if (blk.type === "agent_loop") return `${esc(c.name)} · ${inlineModelChip(blk)} · [${esc(c.tools)}] → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "ask_llm") return `${esc(c.name)} · ${inlineLlmChip(blk)} → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "extract_json") return `${inlineLlmChip(blk)} · (${esc(c.schema_fields)}) from <span class="var-chip">${esc(c.source_var)}</span> → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "agent_loop") return `${esc(c.name)} · ${inlineLlmChip(blk)} · [${esc(c.tools)}] → <span class="var-chip">${esc(c.output_var)}</span>`;
       if (blk.type === "rag_retrieve") return `${esc(c.collection)} · top ${esc(c.top_k)} (${esc(c.query_expr)}) → <span class="var-chip">${esc(c.output_var)}</span>`;
       if (blk.type === "set_state") return `<span class="var-chip">${esc(c.target_var)}</span> = ${esc(c.value_expr)}`;
       if (blk.type === "append_memory") return `[${esc(c.role)}] ${esc(c.content_expr)} → <span class="var-chip">${esc(c.target_var)}</span>`;
       if (blk.type === "if_else") return `If <span class="var-chip">${esc(c.left_var)}</span> ${esc(c.operator)} "${esc(c.right_val)}"`;
-      if (blk.type === "llm_router") return `${inlineModelChip(blk)} · "${esc(c.label_a)}" / "${esc(c.label_b)}" → <span class="var-chip">${esc(c.output_var)}</span>`;
+      if (blk.type === "llm_router") return `${inlineLlmChip(blk)} · "${esc(c.label_a)}" / "${esc(c.label_b)}" → <span class="var-chip">${esc(c.output_var)}</span>`;
       if (blk.type === "repeat_until") return `Until <span class="var-chip">${esc(c.condition_var)}</span> ${esc(c.operator)} ${esc(c.target_val)} (max ${esc(c.max_iterations)})`;
       if (blk.type === "for_each") return `Each <span class="var-chip">${esc(c.item_var)}</span> in <span class="var-chip">${esc(c.list_var)}</span> (max ${esc(c.max_items)})`;
       if (blk.type === "parallel") return `Run branches concurrently`;
@@ -1502,7 +1561,7 @@
       document.getElementById("pageTitleInput").value = state.pageTitle;
       document.getElementById("propInputVar").value = state.workflow.trigger.input_var;
       document.getElementById("propCheckpointer").value = state.workflow.trigger.checkpointer;
-      document.getElementById("propDefaultModel").innerHTML = renderModelOptionsHtml(state.defaultModel, false);
+      renderDefaultLlmProps();
 
       const isEmpty = state.workflow.blocks.length === 0;
       document.getElementById("emptyHint").classList.toggle("hidden", !isEmpty);
@@ -1510,7 +1569,7 @@
       const treeEl = document.getElementById("blockTree");
       treeEl.innerHTML = renderTree(state.workflow.blocks);
 
-      treeEl.querySelectorAll(".inline-model-sel").forEach(sel => {
+      treeEl.querySelectorAll(".inline-mode-sel").forEach(sel => {
         const row = sel.closest(".block-row");
         sel.addEventListener("mousedown", (e) => {
           e.stopPropagation();
@@ -1527,8 +1586,19 @@
           e.stopPropagation();
           const found = findNode(sel.getAttribute("data-blk-id"));
           if (!found) return;
-          found.blk.config.model = sel.value;
+          const nextMode = sel.value === "custom_endpoint" ? "custom_endpoint" : "api";
+          const norm = normalizeLlmConfig({ ...found.blk.config, llm_mode: nextMode });
+          found.blk.config.llm_mode = norm.llm_mode;
+          found.blk.config.api_provider = norm.api_provider;
+          if (nextMode === "api" && !found.blk.config.api_key_env) {
+            found.blk.config.api_key_env = PROVIDER_DEFAULT_ENV[norm.api_provider] || "OPENAI_API_KEY";
+          } else if (nextMode === "custom_endpoint" && Object.values(PROVIDER_DEFAULT_ENV).includes(found.blk.config.api_key_env)) {
+            found.blk.config.api_key_env = "";
+          }
           state.selectedId = found.blk.id;
+          state.drawerOpen = true;
+          state.drawerTab = "inspector";
+          renderCanvas();
           renderInspector();
           syncCompile();
         });
@@ -1596,7 +1666,7 @@
       const body = document.getElementById("dtab-inspector");
       const found = state.selectedId ? findNode(state.selectedId) : null;
       if (!found) {
-        body.innerHTML = `<div style="color:var(--muted);font-size:13px;">Click or drag any block onto the canvas to edit its AI model, prompts, and properties.</div>`;
+        body.innerHTML = `<div style="color:var(--muted);font-size:13px;">Click or drag any block onto the canvas to configure its LLM connection (API or Custom Endpoint), prompts, and properties.</div>`;
         return;
       }
       const blk = found.blk;
@@ -1604,29 +1674,76 @@
       const cfg = blk.config;
       const isAiBlock = AI_BLOCK_TYPES.has(blk.type);
 
+      if (isAiBlock) {
+        const norm = normalizeLlmConfig(cfg);
+        cfg.llm_mode = norm.llm_mode;
+        if (!cfg.api_provider) cfg.api_provider = norm.api_provider;
+        if (!Object.prototype.hasOwnProperty.call(cfg, "api_key_env")) cfg.api_key_env = norm.api_key_env;
+        if (!Object.prototype.hasOwnProperty.call(cfg, "endpoint_url")) cfg.endpoint_url = norm.endpoint_url;
+        if (!Object.prototype.hasOwnProperty.call(cfg, "model")) cfg.model = norm.model;
+      }
+
       const keys = Object.keys(cfg);
       if (isAiBlock) {
-        for (const extra of ["model", "temperature", "max_tokens", "system_prompt"]) {
-          if (!keys.includes(extra)) keys.splice(1, 0, extra);
+        for (const extra of ["llm_mode", "api_provider", "endpoint_url", "api_key_env", "model", "temperature", "max_tokens", "system_prompt"]) {
+          if (!keys.includes(extra)) keys.push(extra);
         }
       }
 
-      const aiSectionKeys = ["model", "temperature", "max_tokens", "output_format", "context_mode", "system_prompt"];
+      const aiConnKeys = cfg.llm_mode === "custom_endpoint"
+        ? ["llm_mode", "endpoint_url", "api_key_env", "model"]
+        : ["llm_mode", "api_provider", "api_key_env", "model"];
+      const aiGenKeys = ["temperature", "max_tokens", "output_format", "context_mode", "system_prompt"];
+      const excludedAiKeys = new Set(["llm_mode", "api_provider", "endpoint_url", "api_key_env", "model", ...aiGenKeys]);
       const orderedKeys = isAiBlock
-        ? [...aiSectionKeys.filter(k => keys.includes(k)), ...keys.filter(k => !aiSectionKeys.includes(k))]
+        ? [...aiConnKeys, ...aiGenKeys.filter(k => keys.includes(k)), ...keys.filter(k => !excludedAiKeys.has(k))]
         : keys;
 
       const renderField = (k) => {
         const label = FIELD_LABELS[k] || k;
-        if (k === "model") {
-          const curModel = String(cfg.model ?? state.defaultModel);
-          const isCustom = curModel && !PRESET_MODEL_SET.has(curModel);
+        if (k === "llm_mode") {
+          const curMode = cfg.llm_mode === "custom_endpoint" ? "custom_endpoint" : "api";
           return `<div class="field">
             <label>${esc(label)}</label>
-            <select class="n-select" id="inspModelSelect">
-              ${renderModelOptionsHtml(curModel, true)}
+            <select class="n-select" id="inspLlmMode">
+              <option value="api" ${curMode === "api" ? "selected" : ""}>API</option>
+              <option value="custom_endpoint" ${curMode === "custom_endpoint" ? "selected" : ""}>Custom Endpoint</option>
             </select>
-            <input id="inspCustomModel" class="n-input ${isCustom ? "" : "hidden"}" style="margin-top:6px;" type="text" placeholder="Enter custom model ID (e.g. ollama/llama3.2)" value="${esc(curModel)}" />
+          </div>`;
+        }
+        if (k === "api_provider") {
+          const prov = cfg.api_provider || "openai";
+          return `<div class="field">
+            <label>${esc(label)}</label>
+            <select class="n-select" id="inspApiProvider">
+              <option value="openai" ${prov === "openai" ? "selected" : ""}>OpenAI</option>
+              <option value="anthropic" ${prov === "anthropic" ? "selected" : ""}>Anthropic</option>
+              <option value="gemini" ${prov === "gemini" ? "selected" : ""}>Gemini</option>
+            </select>
+          </div>`;
+        }
+        if (k === "endpoint_url") {
+          return `<div class="field">
+            <label>${esc(label)}</label>
+            <input class="n-input insp-f" type="text" data-k="endpoint_url" placeholder="http://localhost:11434/v1" value="${esc(cfg.endpoint_url ?? "")}" />
+          </div>`;
+        }
+        if (k === "api_key_env") {
+          const ph = cfg.llm_mode === "custom_endpoint"
+            ? "Optional bearer token env var (e.g. LOCAL_LLM_KEY)"
+            : (PROVIDER_DEFAULT_ENV[cfg.api_provider] || "OPENAI_API_KEY");
+          return `<div class="field">
+            <label>${esc(cfg.llm_mode === "custom_endpoint" ? "API Key Env Var (optional)" : label)}</label>
+            <input class="n-input insp-f" type="text" data-k="api_key_env" placeholder="${esc(ph)}" value="${esc(cfg.api_key_env ?? "")}" />
+          </div>`;
+        }
+        if (k === "model") {
+          const ph = cfg.llm_mode === "custom_endpoint"
+            ? "Model ID served by endpoint (e.g. llama3.2, qwen2.5)"
+            : "Model ID for selected API (e.g. gpt-4o, claude-sonnet-4-5)";
+          return `<div class="field">
+            <label>${esc(label)}</label>
+            <input class="n-input insp-f" type="text" data-k="model" placeholder="${esc(ph)}" value="${esc(cfg.model ?? "")}" />
           </div>`;
         }
         if (k === "temperature") {
@@ -1668,11 +1785,14 @@
 
       let fieldsHtml = "";
       if (isAiBlock) {
-        const aiFields = orderedKeys.filter(k => aiSectionKeys.includes(k));
-        const otherFields = orderedKeys.filter(k => !aiSectionKeys.includes(k));
+        const connFields = aiConnKeys;
+        const genFields = aiGenKeys.filter(k => keys.includes(k));
+        const otherFields = orderedKeys.filter(k => !excludedAiKeys.has(k));
         fieldsHtml = `
-          <div class="insp-section-title" style="margin-top:0;padding-top:0;border-top:0;">Model &amp; Generation</div>
-          ${aiFields.map(renderField).join("")}
+          <div class="insp-section-title" style="margin-top:0;padding-top:0;border-top:0;">LLM Connection</div>
+          ${connFields.map(renderField).join("")}
+          <div class="insp-section-title">Generation Settings</div>
+          ${genFields.map(renderField).join("")}
           <div class="insp-section-title">Prompt &amp; Flow</div>
           ${otherFields.map(renderField).join("")}
         `;
@@ -1688,25 +1808,32 @@
         ${fieldsHtml}
       `;
 
-      const modelSel = document.getElementById("inspModelSelect");
-      const customInp = document.getElementById("inspCustomModel");
-      if (modelSel && customInp) {
-        modelSel.addEventListener("change", () => {
-          if (modelSel.value === "__custom__") {
-            customInp.classList.remove("hidden");
-            customInp.focus();
-            customInp.select();
-          } else {
-            customInp.classList.add("hidden");
-            cfg.model = modelSel.value;
-            customInp.value = cfg.model;
-            renderCanvas();
-            syncCompile();
+      const modeSel = document.getElementById("inspLlmMode");
+      if (modeSel) {
+        modeSel.addEventListener("change", () => {
+          const nextMode = modeSel.value === "custom_endpoint" ? "custom_endpoint" : "api";
+          cfg.llm_mode = nextMode;
+          if (nextMode === "api" && !cfg.api_key_env) {
+            cfg.api_key_env = PROVIDER_DEFAULT_ENV[cfg.api_provider || "openai"] || "OPENAI_API_KEY";
+          } else if (nextMode === "custom_endpoint" && Object.values(PROVIDER_DEFAULT_ENV).includes(cfg.api_key_env)) {
+            cfg.api_key_env = "";
           }
-        });
-        customInp.addEventListener("input", () => {
-          cfg.model = customInp.value || "gpt-4.1-mini";
           renderCanvas();
+          renderInspector();
+          syncCompile();
+        });
+      }
+
+      const provSel = document.getElementById("inspApiProvider");
+      if (provSel) {
+        provSel.addEventListener("change", () => {
+          const prevEnv = cfg.api_key_env || "";
+          cfg.api_provider = provSel.value;
+          if (!prevEnv || Object.values(PROVIDER_DEFAULT_ENV).includes(prevEnv)) {
+            cfg.api_key_env = PROVIDER_DEFAULT_ENV[provSel.value] || "OPENAI_API_KEY";
+          }
+          renderCanvas();
+          renderInspector();
           syncCompile();
         });
       }
@@ -2133,12 +2260,40 @@
       syncCompile();
     });
 
-    document.getElementById("propDefaultModel").addEventListener("change", (e) => {
-      state.defaultModel = e.target.value;
+    document.getElementById("propLlmMode").addEventListener("change", (e) => {
+      const nextMode = e.target.value === "custom_endpoint" ? "custom_endpoint" : "api";
+      state.defaultLlm.llm_mode = nextMode;
+      if (nextMode === "api" && !state.defaultLlm.api_key_env) {
+        state.defaultLlm.api_key_env = PROVIDER_DEFAULT_ENV[state.defaultLlm.api_provider] || "OPENAI_API_KEY";
+      } else if (nextMode === "custom_endpoint" && Object.values(PROVIDER_DEFAULT_ENV).includes(state.defaultLlm.api_key_env)) {
+        state.defaultLlm.api_key_env = "";
+      }
+      renderDefaultLlmProps();
     });
 
-    document.getElementById("applyDefaultModelBtn").addEventListener("click", () => {
-      applyModelToWorkflow(state.workflow.blocks, state.defaultModel);
+    document.getElementById("propApiProvider").addEventListener("change", (e) => {
+      const prevEnv = state.defaultLlm.api_key_env;
+      state.defaultLlm.api_provider = e.target.value;
+      if (!prevEnv || Object.values(PROVIDER_DEFAULT_ENV).includes(prevEnv)) {
+        state.defaultLlm.api_key_env = PROVIDER_DEFAULT_ENV[e.target.value] || "OPENAI_API_KEY";
+      }
+      renderDefaultLlmProps();
+    });
+
+    document.getElementById("propEndpointUrl").addEventListener("input", (e) => {
+      state.defaultLlm.endpoint_url = e.target.value;
+    });
+
+    document.getElementById("propApiKeyEnv").addEventListener("input", (e) => {
+      state.defaultLlm.api_key_env = e.target.value;
+    });
+
+    document.getElementById("propDefaultModel").addEventListener("input", (e) => {
+      state.defaultLlm.model = e.target.value;
+    });
+
+    document.getElementById("applyDefaultLlmBtn").addEventListener("click", () => {
+      applyLlmToWorkflow(state.workflow.blocks, state.defaultLlm);
       renderAll();
       syncCompile();
     });
@@ -2203,18 +2358,34 @@
       const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflow: state.workflow, input: document.getElementById("simInput").value })
+        body: JSON.stringify({
+          workflow: state.workflow,
+          input: document.getElementById("simInput").value,
+          api_key: document.getElementById("simApiKey").value
+        })
       });
       const data = await res.json();
-      const last = data.trace?.[data.trace.length - 1];
-      state.sim = {
-        status: data.status,
-        activeBlockId: data.status === "paused" && last ? last.block_id : null,
-        trace: data.trace || [],
-        threadState: data.state || {},
-        resumeToken: data.resume_token || null,
-        question: data.interrupt_payload?.question || ""
-      };
+      if (!res.ok) {
+        const errMsg = (data.errors || [data.error || "Simulation failed"]).join("; ");
+        state.sim = {
+          status: "error",
+          activeBlockId: null,
+          trace: [{ label: "Execution Error", detail: errMsg, status: "error" }],
+          threadState: { error: errMsg },
+          resumeToken: null,
+          question: ""
+        };
+      } else {
+        const last = data.trace?.[data.trace.length - 1];
+        state.sim = {
+          status: data.status,
+          activeBlockId: data.status === "paused" && last ? last.block_id : null,
+          trace: data.trace || [],
+          threadState: data.state || {},
+          resumeToken: data.resume_token || null,
+          question: data.interrupt_payload?.question || ""
+        };
+      }
       state.drawerOpen = true;
       state.drawerTab = "trace";
       renderAll();

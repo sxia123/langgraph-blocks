@@ -171,3 +171,64 @@ def test_runtime_llm_generation_settings() -> None:
     assert res.status == "done"
     assert seen and seen[0][1] == {"temperature": 0.7, "max_tokens": 256}
     assert "System: help with routing" in res.state["reply"]
+
+
+def test_runtime_custom_endpoint_with_env_and_transient_api_key(monkeypatch) -> None:
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    captured_headers: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            captured_headers.append(self.headers.get("Authorization", ""))
+            raw = json.dumps({"choices": [{"message": {"content": "RUNTIME_EP_OK"}}]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, format, *args):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Handler)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    try:
+        monkeypatch.setenv("CUSTOM_EP_TEST_TOKEN", "env-secret-123")
+        wf = {
+            "trigger": {"name": "rt_ep", "input_var": "user_query", "checkpointer": "MemorySaver"},
+            "blocks": [
+                {
+                    "id": "a1",
+                    "type": "agent_loop",
+                    "config": {
+                        "name": "agent_ep",
+                        "llm_mode": "custom_endpoint",
+                        "endpoint_url": f"http://127.0.0.1:{port}/v1",
+                        "api_key_env": "CUSTOM_EP_TEST_TOKEN",
+                        "model": "mistral-local",
+                        "max_steps": 3,
+                        "prompt": "{{user_query}}",
+                        "output_var": "out_a",
+                    },
+                }
+            ],
+        }
+        runner = WorkflowRunner()
+        res1 = runner.start(wf, "test env key")
+        assert res1.status == "done"
+        assert res1.state["out_a"] == "RUNTIME_EP_OK"
+        assert captured_headers[-1] == "Bearer env-secret-123"
+
+        res2 = runner.start(wf, "test override key", api_key="session-override-456")
+        assert res2.state["out_a"] == "RUNTIME_EP_OK"
+        assert captured_headers[-1] == "Bearer session-override-456"
+    finally:
+        srv.shutdown()
+        srv.server_close()
+        t.join(timeout=2)

@@ -130,10 +130,14 @@ def create_studio_server(host: str = "127.0.0.1", port: int = DEFAULT_STUDIO_POR
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Missing 'workflow' object."})
                     return
                 input_data = body.get("input", "")
+                api_key = str(body.get("api_key", "") or "")
                 try:
-                    result = runner.start(raw_wf, input_data)
+                    result = runner.start(raw_wf, input_data, api_key=api_key)
                 except ValidationError as exc:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc), "errors": exc.errors})
+                    return
+                except RuntimeError as exc:
+                    self._send_json(HTTPStatus.BAD_GATEWAY, {"error": str(exc)})
                     return
                 self._send_json(HTTPStatus.OK, result.to_dict())
                 return
@@ -145,6 +149,9 @@ def create_studio_server(host: str = "127.0.0.1", port: int = DEFAULT_STUDIO_POR
                     result = runner.resume(token, approved)
                 except KeyError as exc:
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+                    return
+                except RuntimeError as exc:
+                    self._send_json(HTTPStatus.BAD_GATEWAY, {"error": str(exc)})
                     return
                 self._send_json(HTTPStatus.OK, result.to_dict())
                 return
