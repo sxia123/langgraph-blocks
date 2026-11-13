@@ -6,6 +6,7 @@
   <title>LangGraph Blocks Studio</title>
   <style>
     :root {
+      color-scheme: dark;
       --bg: #191919;
       --sidebar: #202020;
       --card: #202020;
@@ -38,6 +39,7 @@
     }
 
     html[data-theme="light"] {
+      color-scheme: light;
       --bg: #ffffff;
       --sidebar: #f7f7f5;
       --card: #ffffff;
@@ -192,7 +194,7 @@
 
     /* Left Notion Page Sidebar */
     .sidebar {
-      width: 264px;
+      width: 256px;
       flex-shrink: 0;
       background: var(--sidebar);
       border-right: 1px solid var(--border);
@@ -200,7 +202,9 @@
       flex-direction: column;
       padding: 10px 8px;
       overflow-y: auto;
-      gap: 14px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
+      gap: 10px;
     }
     .sidebar.collapsed {
       display: none;
@@ -276,7 +280,7 @@
       background: transparent;
       border: 0;
       border-radius: 5px;
-      padding: 4px 8px;
+      padding: 3px 8px;
       font-size: 12.5px;
       color: var(--muted);
       cursor: pointer;
