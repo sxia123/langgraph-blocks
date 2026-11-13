@@ -1,0 +1,85 @@
+{
+  "version": "0.1",
+  "trigger": {
+    "name": "research_critique_flow",
+    "input_var": "user_query",
+    "checkpointer": "MemorySaver"
+  },
+  "blocks": [
+    {
+      "id": "parallel_1",
+      "type": "parallel",
+      "config": {
+        "label": "Gather Context"
+      },
+      "branches": {
+        "laneA": [
+          {
+            "id": "call_tool_web",
+            "type": "call_tool",
+            "config": {
+              "tool_name": "web_search",
+              "arg_expr": "{{user_query}}",
+              "output_var": "web_notes"
+            }
+          }
+        ],
+        "laneB": [
+          {
+            "id": "call_tool_kb",
+            "type": "call_tool",
+            "config": {
+              "tool_name": "search_kb",
+              "arg_expr": "{{user_query}}",
+              "output_var": "internal_notes"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "repeat_until_1",
+      "type": "repeat_until",
+      "config": {
+        "condition_var": "quality_score",
+        "operator": ">=",
+        "target_val": "8",
+        "max_iterations": 3
+      },
+      "branches": {
+        "body": [
+          {
+            "id": "ask_llm_write",
+            "type": "ask_llm",
+            "config": {
+              "name": "write_brief",
+              "model": "claude-sonnet",
+              "output_format": "text",
+              "output_var": "draft_brief",
+              "prompt": "Synthesize {{web_notes}} and {{internal_notes}} into a concise brief."
+            }
+          },
+          {
+            "id": "ask_llm_score",
+            "type": "ask_llm",
+            "config": {
+              "name": "score_brief",
+              "model": "gpt-4.1-mini",
+              "output_format": "structured",
+              "output_var": "quality_score",
+              "prompt": "Score {{draft_brief}} from 1-10 for accuracy and completeness."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "respond_final",
+      "type": "respond",
+      "config": {
+        "template": "{{draft_brief}}",
+        "output_var": "final_response"
+      }
+    }
+  ]
+}

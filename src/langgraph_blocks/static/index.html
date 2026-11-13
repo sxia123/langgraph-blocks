@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangGraph Blocks Studio</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #161922;
+      --card: #1d212e;
+      --border: #2b3144;
+      --fg: #eef1f8;
+      --muted: #98a2b8;
+      --primary: #6366f1;
+      --primary-fg: #ffffff;
+      --secondary: #252b3b;
+      --accent-blue: #2563eb;
+      --accent-violet: #7c3aed;
+      --accent-amber: #d97706;
+      --accent-rose: #e11d48;
+      --accent-teal: #0d9488;
+      --accent-green: #10b981;
+    }
+
+    html[data-theme="light"] {
+      --bg: #f4f6fb;
+      --surface: #ffffff;
+      --card: #ffffff;
+      --border: #dce2ee;
+      --fg: #111827;
+      --muted: #5c667a;
+      --primary: #4f46e5;
+      --primary-fg: #ffffff;
+      --secondary: #eef2f9;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+      color: var(--fg);
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--primary-fg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .brand h1 { margin: 0; font-size: 14px; font-weight: 700; }
+    .brand p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--secondary);
+      color: var(--fg);
+      padding: 6px 11px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: var(--primary); }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg);
+    }
+    .btn-success { background: #059669; border-color: #059669; color: #fff; }
+    .btn-danger { background: #e11d48; border-color: #e11d48; color: #fff; }
+
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px;
+      background: var(--bg);
+    }
+    .seg button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .seg button.active {
+      background: var(--primary);
+      color: var(--primary-fg);
+    }
+
+    select.select-input, input.text-input, textarea.text-input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      width: 100%;
+    }
+    select.compact-select { width: auto; }
+
+    .studio-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 270px 1fr 410px;
+      min-height: 0;
+    }
+    @media (max-width: 1080px) {
+      .studio-grid { grid-template-columns: 1fr; }
+    }
+
+    .pane {
+      padding: 14px;
+      overflow-y: auto;
+      max-height: calc(100vh - 58px);
+    }
+    .pane-left { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; }
+    .pane-center { background: var(--bg); }
+    .pane-right { background: var(--surface); border-left: 1px solid var(--border); padding: 0; display: flex; flex-direction: column; }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+
+    .palette-btn {
+      width: 100%;
+      text-align: left;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+    .palette-btn:hover { border-color: var(--primary); }
+
+    .cat-cognitive { border-left-color: var(--accent-violet); }
+    .cat-control { border-left-color: var(--accent-amber); }
+    .cat-human { border-left-color: var(--accent-rose); }
+    .cat-tools { border-left-color: var(--accent-teal); }
+    .cat-trigger { border-left-color: var(--accent-blue); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .bg-cognitive { background: var(--accent-violet); }
+    .bg-control { background: var(--accent-amber); }
+    .bg-human { background: var(--accent-rose); }
+    .bg-tools { background: var(--accent-teal); }
+    .bg-trigger { background: var(--accent-blue); }
+
+    .var-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: color-mix(in srgb, var(--primary) 16%, transparent);
+      color: var(--primary);
+      border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+    }
+
+    .block-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 10px;
+      padding: 11px 12px;
+      cursor: pointer;
+    }
+    .block-card.selected { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .block-card.running { outline: 2px solid var(--accent-green); outline-offset: 2px; }
+    .block-card.paused { outline: 2px solid var(--accent-rose); outline-offset: 2px; }
+
+    .notch {
+      height: 10px;
+      padding-left: 22px;
+      display: flex;
+      align-items: center;
+    }
+
+    .branch-box {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .branch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .empty-slot {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .empty-slot.active-slot {
+      border-color: var(--primary);
+      background: color-mix(in srgb, var(--primary) 8%, transparent);
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0 12px;
+      gap: 4px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      color: var(--fg);
+      border-bottom-color: var(--primary);
+    }
+    .tab-body { padding: 14px; overflow-y: auto; flex: 1; }
+
+    pre.code-box {
+      margin: 0;
+      padding: 12px;
+      border-radius: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .field { margin-bottom: 11px; }
+    .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+
+    .hitl-banner {
+      border: 2px solid var(--accent-rose);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hidden { display: none !important; }
+    .mini-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .mini-btn:hover { color: var(--fg); border-color: var(--primary); }
+    .link-btn { background: none; border: 0; color: var(--primary); font-size: 12px; font-weight: 700; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">LG</div>
+      <div>
+        <h1>LangGraph Blocks Studio</h1>
+        <p id="backendStatus">Connected to Python compiler backend</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <select id="presetSelect" class="select-input compact-select">
+        <option value="support_refund_hitl">Support Refund + HITL</option>
+        <option value="research_critique_loop">Research &amp; Critique Loop</option>
+        <option value="blank">Blank Canvas</option>
+      </select>
+
+      <div class="seg">
+        <button id="targetStateGraph" type="button" class="active">StateGraph</button>
+        <button id="targetFunctional" type="button">Functional API</button>
+      </div>
+
+      <button id="exportJsonBtn" type="button" class="btn">Export JSON</button>
+      <label class="btn" style="display:inline-flex;align-items:center;">
+        Import JSON
+        <input id="importJsonInput" type="file" accept=".json" class="hidden" />
+      </label>
+      <button id="themeToggleBtn" type="button" class="btn">Light / Dark</button>
+      <button id="runBtn" type="button" class="btn btn-primary">&#9654; Simulate Run</button>
+    </div>
+  </header>
+
+  <div class="studio-grid">
+    <!-- Left Palette -->
+    <aside class="pane pane-left">
+      <div>
+        <h2 class="section-title">Block Palette</h2>
+        <div id="slotBanner" class="empty-slot" style="padding:7px 10px;background:var(--card);">
+          <span>Target: <strong id="slotLabel">Main Flow</strong></span>
+          <button id="resetSlotBtn" type="button" class="link-btn hidden">Main</button>
+        </div>
+      </div>
+      <div id="palette"></div>
+      <div style="margin-top:auto;border-top:1px solid var(--border);padding-top:12px;">
+        <h3 class="section-title">Synthesized State</h3>
+        <div id="stateVars" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+    </aside>
+
+    <!-- Center Canvas -->
+    <main class="pane pane-center">
+      <div id="hitlBanner" class="hitl-banner hidden">
+        <div>
+          <strong style="font-size:13px;">Paused at interrupt() — Human Approval Required</strong>
+          <div id="hitlPrompt" style="font-size:12px;color:var(--muted);margin-top:4px;"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button id="approveBtn" type="button" class="btn btn-success">Approve</button>
+          <button id="rejectBtn" type="button" class="btn btn-danger">Reject</button>
+        </div>
+      </div>
+      <div id="canvas"></div>
+    </main>
+
+    <!-- Right Inspector / Compiler / Trace -->
+    <section class="pane-right">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="inspector">Inspector</button>
+        <button class="tab-btn" data-tab="code">Compiled Python</button>
+        <button class="tab-btn" data-tab="trace">Run &amp; State</button>
+      </div>
+      <div id="tab-inspector" class="tab-body"></div>
+      <div id="tab-code" class="tab-body hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <strong id="codeTitle" style="font-size:13px;">Compiled Python</strong>
+          <button id="copyCodeBtn" type="button" class="btn">Copy</button>
+        </div>
+        <pre id="codeOutput" class="code-box"></pre>
+      </div>
+      <div id="tab-trace" class="tab-body hidden">
+        <div class="field">
+          <label for="simInput">Test Input (user_query)</label>
+          <input id="simInput" class="text-input" type="text" value="I was charged twice on order #8492, please refund $49." />
+        </div>
+        <h3 class="section-title">Execution Trace</h3>
+        <div id="traceList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+        <h3 class="section-title">Thread State</h3>
+        <pre id="traceState" class="code-box">{}</pre>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const BLOCK_CATALOG = [
+      { type: "ask_llm", title: "Ask LLM", cat: "cognitive", container: false, defaults: () => ({ name: "classify_intent", model: "gpt-4.1-mini", output_format: "structured", context_mode: "thread_messages", output_var: "intent", prompt: "Classify {{user_query}}." }) },
+      { type: "agent_loop", title: "Agent Tool Loop", cat: "cognitive", container: false, defaults: () => ({ name: "research_agent", model: "claude-sonnet", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} with tools." }) },
+      { type: "if_else", title: "If / Else Branch", cat: "control", container: true, branches: [["then", "If True"], ["else", "Else"]], defaults: () => ({ left_var: "intent", operator: "==", right_val: "refund" }) },
+      { type: "repeat_until", title: "Repeat Until (Bounded)", cat: "control", container: true, branches: [["body", "Do Repeat"]], defaults: () => ({ condition_var: "quality_score", operator: ">=", target_val: "8", max_iterations: 3 }) },
+      { type: "parallel", title: "Parallel Branches", cat: "control", container: true, branches: [["laneA", "Branch A"], ["laneB", "Branch B"]], defaults: () => ({ label: "Fan-out & Join" }) },
+      { type: "human_approval", title: "Human Approval", cat: "human", container: true, branches: [["approved", "On Approved"], ["rejected", "On Rejected"]], defaults: () => ({ question: "Approve action for {{user_query}}?", output_var: "approval" }) },
+      { type: "call_tool", title: "Call Tool", cat: "tools", container: false, defaults: () => ({ tool_name: "lookup_order", arg_expr: "{{user_query}}", output_var: "tool_result" }) },
+      { type: "respond", title: "Final Reply", cat: "trigger", container: false, defaults: () => ({ template: "Result: {{tool_result}}", output_var: "final_response" }) }
+    ];
+
+    const CAT_MAP = Object.fromEntries(BLOCK_CATALOG.map(b => [b.type, b]));
+    let idSeq = 200;
+    const nextId = (prefix) => `${prefix}_${++idSeq}`;
+
+    let presetsCache = {};
+    let app = {
+      workflow: {
+        version: "0.1",
+        trigger: { name: "custom_agent_flow", input_var: "user_query", checkpointer: "MemorySaver" },
+        blocks: []
+      },
+      target: "stategraph",
+      selectedId: "trigger",
+      activeTab: "inspector",
+      activeSlot: { parentId: null, branchKey: null },
+      compiledCode: "",
+      stateVars: ["user_query"],
+      sim: { status: "idle", activeBlockId: null, trace: [], state: {}, resumeToken: null, question: "" }
+    };
+
+    function findNode(id, list = app.workflow.blocks, parent = null, branchKey = null) {
+      for (let i = 0; i < list.length; i++) {
+        const blk = list[i];
+        if (blk.id === id) return { blk, list, idx: i, parent, branchKey };
+        if (blk.branches) {
+          for (const k of Object.keys(blk.branches)) {
+            const res = findNode(id, blk.branches[k], blk, k);
+            if (res) return res;
+          }
+        }
+      }
+      return null;
+    }
+
+    async function syncCompile() {
+      try {
+        const res = await fetch("/api/compile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workflow: app.workflow, target: app.target })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          app.compiledCode = data.code;
+          app.stateVars = data.state_vars || [];
+        } else {
+          app.compiledCode = `# Validation error:\n# ${(data.errors || [data.error]).join("\n# ")}`;
+        }
+      } catch (_err) {
+        app.compiledCode = "# Start with `langgraph-blocks studio` to enable live Python compilation.";
+        document.getElementById("backendStatus").textContent = "Offline preview (start via `langgraph-blocks studio`)";
+      }
+      renderCodeAndVars();
+    }
+
+    function insertBlock(type) {
+      const def = CAT_MAP[type];
+      const node = { id: nextId(type), type, config: def.defaults() };
+      if (def.container) {
+        node.branches = {};
+        for (const [k] of def.branches) node.branches[k] = [];
+      }
+      if (app.activeSlot.parentId && app.activeSlot.branchKey) {
+        const found = findNode(app.activeSlot.parentId);
+        if (found?.blk.branches?.[app.activeSlot.branchKey]) {
+          found.blk.branches[app.activeSlot.branchKey].push(node);
+        } else {
+          app.workflow.blocks.push(node);
+        }
+      } else {
+        app.workflow.blocks.push(node);
+      }
+      app.selectedId = node.id;
+      renderAll();
+      syncCompile();
+    }
+
+    function moveBlock(id, delta) {
+      const found = findNode(id);
+      if (!found) return;
+      const to = found.idx + delta;
+      if (to < 0 || to >= found.list.length) return;
+      const [item] = found.list.splice(found.idx, 1);
+      found.list.splice(to, 0, item);
+      renderAll();
+      syncCompile();
+    }
+
+    function deleteBlock(id) {
+      const found = findNode(id);
+      if (!found) return;
+      found.list.splice(found.idx, 1);
+      if (app.selectedId === id) app.selectedId = app.workflow.blocks[0]?.id || "trigger";
+      if (app.activeSlot.parentId === id) app.activeSlot = { parentId: null, branchKey: null };
+      renderAll();
+      syncCompile();
+    }
+
+    function renderPalette() {
+      const el = document.getElementById("palette");
+      el.innerHTML = BLOCK_CATALOG.map(b => `
+        <button type="button" class="palette-btn cat-${b.cat}" data-add="${b.type}">
+          <div>
+            <div style="font-weight:700;font-size:12px;">${b.title}</div>
+            <div style="font-size:12px;color:var(--muted);">${b.container ? "Container" : "Action"}</div>
+          </div>
+          <span style="color:var(--primary);font-weight:700;font-size:12px;">+ Add</span>
+        </button>
+      `).join("");
+      el.querySelectorAll("[data-add]").forEach(btn => {
+        btn.addEventListener("click", () => insertBlock(btn.getAttribute("data-add")));
+      });
+
+      const slotLbl = document.getElementById("slotLabel");
+      const resetBtn = document.getElementById("resetSlotBtn");
+      if (app.activeSlot.parentId) {
+        const found = findNode(app.activeSlot.parentId);
+        const def = found ? CAT_MAP[found.blk.type] : null;
+        slotLbl.textContent = `${def ? def.title : "Block"} -> ${app.activeSlot.branchKey}`;
+        resetBtn.classList.remove("hidden");
+      } else {
+        slotLbl.textContent = "Main Flow";
+        resetBtn.classList.add("hidden");
+      }
+    }
+
+    function summaryText(blk) {
+      const c = blk.config;
+      if (blk.type === "ask_llm") return `${c.name} (${c.model}) -> <span class="var-pill">${c.output_var}</span>`;
+      if (blk.type === "agent_loop") return `Tools [${c.tools}] max ${c.max_steps} -> <span class="var-pill">${c.output_var}</span>`;
+      if (blk.type === "if_else") return `If <span class="var-pill">${c.left_var}</span> ${c.operator} "${c.right_val}"`;
+      if (blk.type === "repeat_until") return `Until <span class="var-pill">${c.condition_var}</span> ${c.operator} ${c.target_val} (max ${c.max_iterations})`;
+      if (blk.type === "parallel") return `Run concurrent branches, join into State`;
+      if (blk.type === "human_approval") return `Pause interrupt() -> <span class="var-pill">${c.output_var}</span>`;
+      if (blk.type === "call_tool") return `${c.tool_name}(${c.arg_expr}) -> <span class="var-pill">${c.output_var}</span>`;
+      if (blk.type === "respond") return `Return ${c.template}`;
+      return "";
+    }
+
+    function renderList(blocks, parentId = null, branchKey = null) {
+      if (!blocks.length) {
+        const isTarget = app.activeSlot.parentId === parentId && app.activeSlot.branchKey === branchKey;
+        return `<div class="empty-slot ${isTarget ? "active-slot" : ""}">
+          <span>Empty branch</span>
+          <button type="button" class="link-btn slot-pick" data-p="${parentId || ""}" data-b="${branchKey || ""}">
+            ${isTarget ? "Inserting Here" : "+ Insert Here"}
+          </button>
+        </div>`;
+      }
+      return blocks.map((blk, i) => {
+        const def = CAT_MAP[blk.type];
+        const cls = app.sim.activeBlockId === blk.id
+          ? (app.sim.status === "paused" ? "paused" : "running")
+          : (app.selectedId === blk.id ? "selected" : "");
+        let childHtml = "";
+        if (def.container) {
+          childHtml = def.branches.map(([bKey, bLabel]) => {
+            const isTarget = app.activeSlot.parentId === blk.id && app.activeSlot.branchKey === bKey;
+            return `<div class="branch-box">
+              <div class="branch-header">
+                <span>${bLabel}</span>
+                <button type="button" class="link-btn slot-pick" data-p="${blk.id}" data-b="${bKey}">
+                  ${isTarget ? "Inserting Here" : "+ Insert Here"}
+                </button>
+              </div>
+              ${renderList(blk.branches[bKey] || [], blk.id, bKey)}
+            </div>`;
+          }).join("");
+        }
+        return `
+          ${i > 0 ? '<div class="notch"><svg width="24" height="10" viewBox="0 0 24 10"><path d="M0 0 H6 L9 6 H15 L18 0 H24" fill="none" stroke="var(--border)" stroke-width="1.5"/></svg></div>' : ""}
+          <div class="block-card cat-${def.cat} ${cls}" data-select="${blk.id}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                <span class="badge bg-${def.cat}">${def.title}</span>
+                <span style="font-size:12px;color:var(--muted);">${summaryText(blk)}</span>
+              </div>
+              <div style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
+                <button type="button" class="mini-btn mv-up" data-id="${blk.id}">&uarr;</button>
+                <button type="button" class="mini-btn mv-dn" data-id="${blk.id}">&darr;</button>
+                <button type="button" class="mini-btn rm-blk" data-id="${blk.id}" style="color:var(--accent-rose);">&times;</button>
+              </div>
+            </div>
+            ${childHtml}
+          </div>`;
+      }).join("");
+    }
+
+    function renderCanvas() {
+      const trig = app.workflow.trigger;
+      const trigCls = app.selectedId === "trigger" ? "selected" : "";
+      const hat = `<div class="block-card cat-trigger ${trigCls}" data-select="trigger">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="badge bg-trigger">On Message (Trigger)</span>
+            <strong>${trig.name}</strong>
+            <span class="var-pill">${trig.input_var}</span>
+          </div>
+          <span style="font-size:12px;color:var(--muted);">Checkpointer: <strong>${trig.checkpointer}</strong></span>
+        </div>
+      </div>`;
+
+      const footer = `<div style="margin-top:12px;text-align:center;">
+        <button type="button" class="btn slot-pick" data-p="" data-b="">
+          ${!app.activeSlot.parentId ? "Active Target: Main Flow End" : "+ Target Main Flow End"}
+        </button>
+      </div>`;
+
+      const canvas = document.getElementById("canvas");
+      canvas.innerHTML = hat + '<div class="notch"></div>' + renderList(app.workflow.blocks) + footer;
+
+      canvas.querySelectorAll("[data-select]").forEach(el => {
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          app.selectedId = el.getAttribute("data-select");
+          app.activeTab = "inspector";
+          renderAll();
+        });
+      });
+      canvas.querySelectorAll(".slot-pick").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          app.activeSlot = { parentId: btn.getAttribute("data-p") || null, branchKey: btn.getAttribute("data-b") || null };
+          renderAll();
+        });
+      });
+      canvas.querySelectorAll(".mv-up").forEach(btn => btn.addEventListener("click", () => moveBlock(btn.getAttribute("data-id"), -1)));
+      canvas.querySelectorAll(".mv-dn").forEach(btn => btn.addEventListener("click", () => moveBlock(btn.getAttribute("data-id"), 1)));
+      canvas.querySelectorAll(".rm-blk").forEach(btn => btn.addEventListener("click", () => deleteBlock(btn.getAttribute("data-id"))));
+
+      const hitl = document.getElementById("hitlBanner");
+      if (app.sim.status === "paused") {
+        document.getElementById("hitlPrompt").textContent = app.sim.question;
+        hitl.classList.remove("hidden");
+      } else {
+        hitl.classList.add("hidden");
+      }
+    }
+
+    function renderInspector() {
+      const box = document.getElementById("tab-inspector");
+      if (app.selectedId === "trigger") {
+        const t = app.workflow.trigger;
+        box.innerHTML = `
+          <div class="field"><label>Workflow Name</label><input class="text-input insp" data-k="name" value="${t.name}" /></div>
+          <div class="field"><label>Input Variable</label><input class="text-input insp" data-k="input_var" value="${t.input_var}" /></div>
+          <div class="field"><label>Checkpointer</label>
+            <select class="select-input insp" data-k="checkpointer">
+              ${["MemorySaver", "PostgresSaver", "SqliteSaver"].map(c => `<option ${c === t.checkpointer ? "selected" : ""}>${c}</option>`).join("")}
+            </select>
+          </div>`;
+        box.querySelectorAll(".insp").forEach(inp => inp.addEventListener("input", () => {
+          t[inp.getAttribute("data-k")] = inp.value;
+          renderCanvas();
+          syncCompile();
+        }));
+        return;
+      }
+
+      const found = findNode(app.selectedId);
+      if (!found) {
+        box.innerHTML = `<p style="color:var(--muted);">Select a block to inspect or edit.</p>`;
+        return;
+      }
+      const c = found.blk.config;
+      const fields = Object.keys(c).map(k => {
+        const isLong = k === "prompt" || k === "question" || k === "template";
+        const isNum = k === "max_steps" || k === "max_iterations";
+        return `<div class="field"><label>${k}</label>${
+          isLong
+            ? `<textarea class="text-input insp" rows="3" data-k="${k}">${c[k]}</textarea>`
+            : `<input class="text-input insp" type="${isNum ? "number" : "text"}" data-k="${k}" value="${String(c[k]).replace(/"/g, "&quot;")}" />`
+        }</div>`;
+      }).join("");
+      box.innerHTML = `<div style="margin-bottom:10px;font-weight:700;">${CAT_MAP[found.blk.type].title} (${found.blk.id})</div>${fields}`;
+      box.querySelectorAll(".insp").forEach(inp => inp.addEventListener("input", () => {
+        const k = inp.getAttribute("data-k");
+        c[k] = inp.type === "number" ? Math.max(1, Number(inp.value) || 1) : inp.value;
+        renderCanvas();
+        syncCompile();
+      }));
+    }
+
+    function renderCodeAndVars() {
+      document.getElementById("codeTitle").textContent =
+        app.target === "stategraph" ? "Compiled LangGraph (StateGraph API)" : "Compiled LangGraph (Functional API)";
+      document.getElementById("codeOutput").textContent = app.compiledCode;
+      document.getElementById("stateVars").innerHTML = app.stateVars.map(v => `<span class="var-pill">${v}</span>`).join("");
+    }
+
+    function renderTabsAndTrace() {
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        const tab = btn.getAttribute("data-tab");
+        btn.classList.toggle("active", tab === app.activeTab);
+        document.getElementById(`tab-${tab}`).classList.toggle("hidden", tab !== app.activeTab);
+      });
+      document.getElementById("targetStateGraph").classList.toggle("active", app.target === "stategraph");
+      document.getElementById("targetFunctional").classList.toggle("active", app.target === "functional");
+
+      const list = document.getElementById("traceList");
+      list.innerHTML = app.sim.trace.length
+        ? app.sim.trace.map((t, idx) => `
+            <div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg);">
+              <div style="font-weight:700;font-size:12px;">${idx + 1}. ${t.label}</div>
+              <div style="font-size:12px;color:var(--muted);">${t.detail}</div>
+            </div>`).join("")
+        : `<div style="color:var(--muted);font-size:12px;">Click Simulate Run to execute the workflow.</div>`;
+      document.getElementById("traceState").textContent = JSON.stringify(app.sim.state, null, 2);
+    }
+
+    function renderAll() {
+      renderPalette();
+      renderCanvas();
+      renderInspector();
+      renderCodeAndVars();
+      renderTabsAndTrace();
+    }
+
+    async function loadPresets() {
+      try {
+        const res = await fetch("/api/examples");
+        const data = await res.json();
+        presetsCache = data.examples || {};
+        if (presetsCache.support_refund_hitl) {
+          app.workflow = structuredClone(presetsCache.support_refund_hitl);
+          app.selectedId = app.workflow.blocks[0]?.id || "trigger";
+        }
+      } catch (_err) {
+        presetsCache = {};
+      }
+      renderAll();
+      syncCompile();
+    }
+
+    document.getElementById("presetSelect").addEventListener("change", (e) => {
+      const key = e.target.value;
+      app.sim = { status: "idle", activeBlockId: null, trace: [], state: {}, resumeToken: null, question: "" };
+      app.activeSlot = { parentId: null, branchKey: null };
+      if (key === "blank") {
+        app.workflow = { version: "0.1", trigger: { name: "custom_agent_flow", input_var: "user_query", checkpointer: "MemorySaver" }, blocks: [] };
+      } else if (presetsCache[key]) {
+        app.workflow = structuredClone(presetsCache[key]);
+      }
+      app.selectedId = app.workflow.blocks[0]?.id || "trigger";
+      renderAll();
+      syncCompile();
+    });
+
+    document.getElementById("targetStateGraph").addEventListener("click", () => {
+      app.target = "stategraph";
+      app.activeTab = "code";
+      renderTabsAndTrace();
+      syncCompile();
+    });
+
+    document.getElementById("targetFunctional").addEventListener("click", () => {
+      app.target = "functional";
+      app.activeTab = "code";
+      renderTabsAndTrace();
+      syncCompile();
+    });
+
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        app.activeTab = btn.getAttribute("data-tab");
+        renderTabsAndTrace();
+      });
+    });
+
+    document.getElementById("resetSlotBtn").addEventListener("click", () => {
+      app.activeSlot = { parentId: null, branchKey: null };
+      renderAll();
+    });
+
+    document.getElementById("themeToggleBtn").addEventListener("click", () => {
+      const html = document.documentElement;
+      html.setAttribute("data-theme", html.getAttribute("data-theme") === "dark" ? "light" : "dark");
+    });
+
+    document.getElementById("copyCodeBtn").addEventListener("click", () => {
+      navigator.clipboard?.writeText(app.compiledCode);
+      const btn = document.getElementById("copyCodeBtn");
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = "Copy"; }, 1000);
+    });
+
+    document.getElementById("exportJsonBtn").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(app.workflow, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${app.workflow.trigger.name || "workflow"}.json`;
+      a.click();
+    });
+
+    document.getElementById("importJsonInput").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      app.workflow = JSON.parse(await file.text());
+      app.selectedId = app.workflow.blocks[0]?.id || "trigger";
+      renderAll();
+      syncCompile();
+    });
+
+    document.getElementById("runBtn").addEventListener("click", async () => {
+      const res = await fetch("/api/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow: app.workflow, input: document.getElementById("simInput").value })
+      });
+      const data = await res.json();
+      const last = data.trace?.[data.trace.length - 1];
+      app.sim = {
+        status: data.status,
+        activeBlockId: data.status === "paused" && last ? last.block_id : null,
+        trace: data.trace || [],
+        state: data.state || {},
+        resumeToken: data.resume_token || null,
+        question: data.interrupt_payload?.question || ""
+      };
+      app.activeTab = "trace";
+      renderAll();
+    });
+
+    async function handleResume(approved) {
+      if (!app.sim.resumeToken) return;
+      const res = await fetch("/api/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_token: app.sim.resumeToken, approved })
+      });
+      const data = await res.json();
+      const last = data.trace?.[data.trace.length - 1];
+      app.sim = {
+        status: data.status,
+        activeBlockId: data.status === "paused" && last ? last.block_id : null,
+        trace: data.trace || [],
+        state: data.state || {},
+        resumeToken: data.resume_token || null,
+        question: data.interrupt_payload?.question || ""
+      };
+      renderAll();
+    }
+
+    document.getElementById("approveBtn").addEventListener("click", () => handleResume(true));
+    document.getElementById("rejectBtn").addEventListener("click", () => handleResume(false));
+
+    loadPresets();
+  </script>
+</body>
+</html>

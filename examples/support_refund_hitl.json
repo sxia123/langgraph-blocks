@@ -1,0 +1,105 @@
+{
+  "version": "0.1",
+  "trigger": {
+    "name": "support_refund_flow",
+    "input_var": "user_query",
+    "checkpointer": "MemorySaver"
+  },
+  "blocks": [
+    {
+      "id": "ask_llm_1",
+      "type": "ask_llm",
+      "config": {
+        "name": "classify_intent",
+        "model": "gpt-4.1-mini",
+        "output_format": "structured",
+        "context_mode": "thread_messages",
+        "output_var": "intent",
+        "prompt": "Classify {{user_query}} as 'refund' or 'general'."
+      }
+    },
+    {
+      "id": "if_else_1",
+      "type": "if_else",
+      "config": {
+        "left_var": "intent",
+        "operator": "==",
+        "right_val": "refund"
+      },
+      "branches": {
+        "then": [
+          {
+            "id": "call_tool_1",
+            "type": "call_tool",
+            "config": {
+              "tool_name": "lookup_order",
+              "arg_expr": "{{user_query}}",
+              "output_var": "order_record"
+            }
+          },
+          {
+            "id": "human_approval_1",
+            "type": "human_approval",
+            "config": {
+              "question": "Approve refund based on {{order_record}}?",
+              "output_var": "approval"
+            },
+            "branches": {
+              "approved": [
+                {
+                  "id": "call_tool_2",
+                  "type": "call_tool",
+                  "config": {
+                    "tool_name": "issue_refund",
+                    "arg_expr": "{{order_record}}",
+                    "output_var": "refund_receipt"
+                  }
+                },
+                {
+                  "id": "respond_1",
+                  "type": "respond",
+                  "config": {
+                    "template": "Refund processed: {{refund_receipt}}",
+                    "output_var": "final_response"
+                  }
+                }
+              ],
+              "rejected": [
+                {
+                  "id": "respond_2",
+                  "type": "respond",
+                  "config": {
+                    "template": "Sorry, your refund request was declined after review.",
+                    "output_var": "final_response"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "else": [
+          {
+            "id": "agent_loop_1",
+            "type": "agent_loop",
+            "config": {
+              "name": "support_answer_agent",
+              "model": "claude-sonnet",
+              "tools": "search_kb",
+              "max_steps": 4,
+              "output_var": "answer_draft",
+              "prompt": "Answer {{user_query}} accurately using KB search."
+            }
+          },
+          {
+            "id": "respond_3",
+            "type": "respond",
+            "config": {
+              "template": "{{answer_draft}}",
+              "output_var": "final_response"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
