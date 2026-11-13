@@ -6,43 +6,72 @@
   <title>LangGraph Blocks Studio</title>
   <style>
     :root {
-      --bg: #0f1117;
-      --surface: #161922;
-      --card: #1d212e;
-      --border: #2b3144;
-      --fg: #eef1f8;
-      --muted: #98a2b8;
-      --primary: #6366f1;
-      --primary-fg: #ffffff;
-      --secondary: #252b3b;
-      --accent-blue: #2563eb;
-      --accent-violet: #7c3aed;
-      --accent-amber: #d97706;
-      --accent-rose: #e11d48;
-      --accent-teal: #0d9488;
-      --accent-green: #10b981;
+      --bg: #191919;
+      --sidebar: #202020;
+      --card: #202020;
+      --card-hover: #262626;
+      --popover: #252525;
+      --border: rgba(255, 255, 255, 0.085);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --fg: rgba(255, 255, 255, 0.9);
+      --muted: rgba(255, 255, 255, 0.5);
+      --faint: rgba(255, 255, 255, 0.3);
+      --accent: #2383e2;
+      --accent-fg: #ffffff;
+      --pill-bg: rgba(255, 255, 255, 0.06);
+      --selected-bg: rgba(35, 131, 226, 0.08);
+      --running-ring: #3b9c6d;
+      --paused-ring: #d46b7a;
+
+      --tag-cog-bg: rgba(155, 130, 210, 0.14);
+      --tag-cog-fg: #c6b5f0;
+      --tag-ctl-bg: rgba(217, 169, 92, 0.14);
+      --tag-ctl-fg: #e2be80;
+      --tag-hum-bg: rgba(223, 120, 134, 0.14);
+      --tag-hum-fg: #ea9da7;
+      --tag-tol-bg: rgba(105, 185, 155, 0.14);
+      --tag-tol-fg: #87d1b5;
+      --tag-rep-bg: rgba(118, 168, 224, 0.14);
+      --tag-rep-fg: #9cc3ee;
     }
 
     html[data-theme="light"] {
-      --bg: #f4f6fb;
-      --surface: #ffffff;
+      --bg: #ffffff;
+      --sidebar: #f7f7f5;
       --card: #ffffff;
-      --border: #dce2ee;
-      --fg: #111827;
-      --muted: #5c667a;
-      --primary: #4f46e5;
-      --primary-fg: #ffffff;
-      --secondary: #eef2f9;
+      --card-hover: #f1f1ef;
+      --popover: #ffffff;
+      --border: rgba(55, 53, 47, 0.09);
+      --border-strong: rgba(55, 53, 47, 0.18);
+      --fg: #37352f;
+      --muted: rgba(55, 53, 47, 0.62);
+      --faint: rgba(55, 53, 47, 0.38);
+      --pill-bg: rgba(55, 53, 47, 0.06);
+      --selected-bg: rgba(35, 131, 226, 0.07);
+
+      --tag-cog-bg: rgba(124, 92, 191, 0.12);
+      --tag-cog-fg: #5e3ea8;
+      --tag-ctl-bg: rgba(203, 145, 47, 0.13);
+      --tag-ctl-fg: #936210;
+      --tag-hum-bg: rgba(212, 76, 71, 0.12);
+      --tag-hum-fg: #a63430;
+      --tag-tol-bg: rgba(68, 131, 97, 0.13);
+      --tag-tol-fg: #2c6b49;
+      --tag-rep-bg: rgba(51, 126, 169, 0.13);
+      --tag-rep-fg: #216187;
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 13px;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
       background: var(--bg);
       color: var(--fg);
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
     }
@@ -52,419 +81,825 @@
       color: var(--fg);
     }
 
+    /* Top Notion-style breadcrumb bar */
     .topbar {
+      height: 44px;
+      flex-shrink: 0;
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 10px 16px;
-      background: var(--surface);
+      padding: 0 14px;
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
+      gap: 12px;
     }
 
-    .brand {
+    .topbar-left {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      min-width: 0;
     }
 
-    .brand-logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: var(--primary);
-      color: var(--primary-fg);
+    .breadcrumb {
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .breadcrumb strong {
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #4caf7d;
+      display: inline-block;
+      margin-left: 4px;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .n-btn {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 4px 9px;
+      border-radius: 5px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .n-btn:hover {
+      background: var(--card-hover);
+      color: var(--fg);
+    }
+    .n-btn.active {
+      background: var(--pill-bg);
+      color: var(--fg);
+    }
+
+    .n-btn-outline {
+      border-color: var(--border-strong);
+      color: var(--fg);
+    }
+
+    .n-btn-primary {
+      background: var(--accent);
+      color: var(--accent-fg);
+      padding: 4px 11px;
+    }
+    .n-btn-primary:hover {
+      background: #1b74cc;
+      color: var(--accent-fg);
+    }
+
+    .n-btn-approve {
+      background: #2f7d57;
+      color: #fff;
+    }
+    .n-btn-reject {
+      background: #a4414e;
+      color: #fff;
+    }
+
+    /* Main Workspace Shell */
+    .shell {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    /* Left Notion Page Sidebar */
+    .sidebar {
+      width: 236px;
+      flex-shrink: 0;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 12px 8px;
+      overflow-y: auto;
+      gap: 18px;
+    }
+    .sidebar.collapsed {
+      display: none;
+    }
+
+    .side-group-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      padding: 0 8px 4px;
+    }
+
+    .side-item {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
+      padding: 5px 8px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .side-item:hover {
+      background: var(--card-hover);
+      color: var(--fg);
+    }
+    .side-item.active {
+      background: var(--pill-bg);
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    .side-footer {
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    /* Center Blank Dark Canvas */
+    .canvas-scroll {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg);
+      padding: 48px 32px 140px;
+      position: relative;
+    }
+
+    .page-sheet {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .page-title-input {
+      width: 100%;
+      background: transparent;
+      border: 0;
+      outline: none;
+      font-size: 32px;
       font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--fg);
+      padding: 2px 0;
+      margin-bottom: 12px;
+    }
+    .page-title-input::placeholder {
+      color: var(--faint);
+    }
+
+    /* Notion Page Properties */
+    .props-table {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      row-gap: 4px;
+      column-gap: 12px;
+      padding: 8px 0 18px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--border);
       font-size: 13px;
     }
 
-    .brand h1 { margin: 0; font-size: 14px; font-weight: 700; }
-    .brand p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
-
-    .controls {
+    .prop-label {
+      color: var(--muted);
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
+      padding: 3px 0;
+    }
+
+    .prop-value {
+      display: flex;
+      align-items: center;
+    }
+
+    .prop-inline-input, .prop-inline-select {
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 13px;
+      color: var(--fg);
+      outline: none;
+    }
+    .prop-inline-input:hover, .prop-inline-select:hover,
+    .prop-inline-input:focus, .prop-inline-select:focus {
+      background: var(--card-hover);
+      border-color: var(--border);
+    }
+    .prop-inline-select option {
+      background: var(--popover);
+      color: var(--fg);
+    }
+
+    /* Notion-style Blocks */
+    .block-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .block-row {
+      position: relative;
+      border-radius: 6px;
+      padding: 7px 10px 7px 30px;
+      border: 1px solid transparent;
+      transition: background 0.1s ease, border-color 0.1s ease;
+      cursor: pointer;
+    }
+
+    .block-row:hover {
+      background: var(--card-hover);
+    }
+
+    .block-row.selected {
+      background: var(--selected-bg);
+      border-color: rgba(35, 131, 226, 0.35);
+    }
+
+    .block-row.running {
+      border-color: var(--running-ring);
+      background: rgba(76, 175, 125, 0.08);
+    }
+
+    .block-row.paused {
+      border-color: var(--paused-ring);
+      background: rgba(212, 107, 122, 0.09);
+    }
+
+    .block-handle {
+      position: absolute;
+      left: 6px;
+      top: 9px;
+      color: var(--faint);
+      font-size: 13px;
+      line-height: 1;
+      user-select: none;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+
+    .block-row:hover > .block-handle,
+    .block-row.selected > .block-handle {
+      opacity: 1;
+    }
+
+    .block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .block-main {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 7px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .tag-cognitive { background: var(--tag-cog-bg); color: var(--tag-cog-fg); }
+    .tag-control { background: var(--tag-ctl-bg); color: var(--tag-ctl-fg); }
+    .tag-human { background: var(--tag-hum-bg); color: var(--tag-hum-fg); }
+    .tag-tools { background: var(--tag-tol-bg); color: var(--tag-tol-fg); }
+    .tag-trigger { background: var(--tag-rep-bg); color: var(--tag-rep-fg); }
+
+    .block-summary {
+      font-size: 13px;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .var-chip {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      padding: 0 6px;
+      border-radius: 4px;
+      background: var(--pill-bg);
+      color: var(--fg);
+      border: 1px solid var(--border);
+    }
+
+    .block-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+      flex-shrink: 0;
+    }
+    .block-row:hover > .block-header .block-actions,
+    .block-row.selected > .block-header .block-actions {
+      opacity: 1;
+    }
+
+    .icon-btn {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-btn:hover {
+      background: var(--pill-bg);
+      color: var(--fg);
+    }
+
+    /* Nested Notion Toggle / Indented Branch Containers */
+    .branches-wrap {
+      margin-top: 6px;
+      margin-left: 4px;
+      padding-left: 14px;
+      border-left: 1px solid var(--border-strong);
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
 
-    .btn {
-      border: 1px solid var(--border);
-      background: var(--secondary);
-      color: var(--fg);
-      padding: 6px 11px;
+    .branch-group-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 4px;
+    }
+
+    /* Notion "+ Add block or press /" trigger */
+    .slash-prompt {
+      margin-top: 6px;
+      border: 0;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px 6px 30px;
+      border-radius: 6px;
+      color: var(--faint);
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .slash-prompt:hover {
+      background: var(--card-hover);
+      color: var(--muted);
+    }
+
+    .slash-prompt-inline {
+      padding: 4px 8px;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .empty-canvas-hint {
+      padding: 28px 10px 10px 30px;
+      color: var(--faint);
+      font-size: 14px;
+    }
+
+    /* Notion Slash Command Popover */
+    .slash-menu {
+      position: fixed;
+      z-index: 50;
+      width: 310px;
+      max-height: 360px;
+      background: var(--popover);
+      border: 1px solid var(--border-strong);
       border-radius: 8px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .slash-search {
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+      padding: 10px 12px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .slash-items {
+      overflow-y: auto;
+      padding: 6px;
+    }
+
+    .slash-item {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      border-radius: 5px;
+      padding: 7px 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .slash-item:hover, .slash-item.active {
+      background: var(--card-hover);
+    }
+
+    .slash-item-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+    .slash-item-desc {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Right Drawer (Inspector / Code / Run) */
+    .drawer {
+      width: 370px;
+      flex-shrink: 0;
+      background: var(--sidebar);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .drawer.collapsed {
+      display: none;
+    }
+
+    .drawer-tabs {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding: 0 10px;
+      height: 40px;
+      flex-shrink: 0;
+    }
+
+    .drawer-tab-group {
+      display: flex;
+      gap: 2px;
+    }
+
+    .d-tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 9px 10px;
       font-size: 12px;
       font-weight: 600;
+      border-bottom: 2px solid transparent;
       cursor: pointer;
     }
-    .btn:hover { border-color: var(--primary); }
-    .btn-primary {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: var(--primary-fg);
+    .d-tab:hover { color: var(--fg); }
+    .d-tab.active {
+      color: var(--fg);
+      border-bottom-color: var(--fg);
     }
-    .btn-success { background: #059669; border-color: #059669; color: #fff; }
-    .btn-danger { background: #e11d48; border-color: #e11d48; color: #fff; }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .n-input, .n-select, .n-textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 6px 8px;
+      font-size: 13px;
+      outline: none;
+    }
+    .n-input:focus, .n-select:focus, .n-textarea:focus {
+      border-color: var(--accent);
+    }
 
     .seg {
       display: inline-flex;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 2px;
       background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px;
     }
     .seg button {
       border: 0;
       background: transparent;
       color: var(--muted);
-      padding: 5px 10px;
-      border-radius: 6px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 4px;
       cursor: pointer;
     }
     .seg button.active {
-      background: var(--primary);
-      color: var(--primary-fg);
-    }
-
-    select.select-input, input.text-input, textarea.text-input {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 12px;
-      width: 100%;
-    }
-    select.compact-select { width: auto; }
-
-    .studio-grid {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 270px 1fr 410px;
-      min-height: 0;
-    }
-    @media (max-width: 1080px) {
-      .studio-grid { grid-template-columns: 1fr; }
-    }
-
-    .pane {
-      padding: 14px;
-      overflow-y: auto;
-      max-height: calc(100vh - 58px);
-    }
-    .pane-left { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; }
-    .pane-center { background: var(--bg); }
-    .pane-right { background: var(--surface); border-left: 1px solid var(--border); padding: 0; display: flex; flex-direction: column; }
-
-    .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--muted);
-      margin: 0 0 8px;
-    }
-
-    .palette-btn {
-      width: 100%;
-      text-align: left;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-left-width: 4px;
-      border-radius: 8px;
-      padding: 8px 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      cursor: pointer;
-      margin-bottom: 6px;
-    }
-    .palette-btn:hover { border-color: var(--primary); }
-
-    .cat-cognitive { border-left-color: var(--accent-violet); }
-    .cat-control { border-left-color: var(--accent-amber); }
-    .cat-human { border-left-color: var(--accent-rose); }
-    .cat-tools { border-left-color: var(--accent-teal); }
-    .cat-trigger { border-left-color: var(--accent-blue); }
-
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #fff;
-    }
-    .bg-cognitive { background: var(--accent-violet); }
-    .bg-control { background: var(--accent-amber); }
-    .bg-human { background: var(--accent-rose); }
-    .bg-tools { background: var(--accent-teal); }
-    .bg-trigger { background: var(--accent-blue); }
-
-    .var-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      background: color-mix(in srgb, var(--primary) 16%, transparent);
-      color: var(--primary);
-      border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
-    }
-
-    .block-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-left-width: 4px;
-      border-radius: 10px;
-      padding: 11px 12px;
-      cursor: pointer;
-    }
-    .block-card.selected { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .block-card.running { outline: 2px solid var(--accent-green); outline-offset: 2px; }
-    .block-card.paused { outline: 2px solid var(--accent-rose); outline-offset: 2px; }
-
-    .notch {
-      height: 10px;
-      padding-left: 22px;
-      display: flex;
-      align-items: center;
-    }
-
-    .branch-box {
-      margin-top: 10px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--bg);
-    }
-    .branch-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .empty-slot {
-      border: 1px dashed var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 12px;
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .empty-slot.active-slot {
-      border-color: var(--primary);
-      background: color-mix(in srgb, var(--primary) 8%, transparent);
-    }
-
-    .tabs {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-      padding: 0 12px;
-      gap: 4px;
-    }
-    .tab-btn {
-      background: transparent;
-      border: 0;
-      border-bottom: 2px solid transparent;
-      padding: 10px 12px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--muted);
-      cursor: pointer;
-    }
-    .tab-btn.active {
+      background: var(--pill-bg);
       color: var(--fg);
-      border-bottom-color: var(--primary);
     }
-    .tab-body { padding: 14px; overflow-y: auto; flex: 1; }
 
-    pre.code-box {
+    pre.code-block {
       margin: 0;
       padding: 12px;
-      border-radius: 10px;
+      border-radius: 6px;
       background: var(--bg);
       border: 1px solid var(--border);
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.55;
       overflow-x: auto;
       white-space: pre;
     }
 
-    .field { margin-bottom: 11px; }
-    .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
-
-    .hitl-banner {
-      border: 2px solid var(--accent-rose);
-      background: var(--card);
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 12px;
+    .hitl-callout {
+      border: 1px solid rgba(212, 107, 122, 0.45);
+      background: rgba(212, 107, 122, 0.08);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 16px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
       gap: 12px;
     }
 
-    .hidden { display: none !important; }
-    .mini-btn {
-      background: transparent;
+    .trace-item {
+      padding: 7px 9px;
+      border-radius: 5px;
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 2px 7px;
-      font-size: 12px;
-      cursor: pointer;
-      color: var(--muted);
+      background: var(--bg);
+      margin-bottom: 6px;
     }
-    .mini-btn:hover { color: var(--fg); border-color: var(--primary); }
-    .link-btn { background: none; border: 0; color: var(--primary); font-size: 12px; font-weight: 700; cursor: pointer; }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 960px) {
+      .sidebar { display: none; }
+      .drawer { width: 320px; }
+    }
   </style>
 </head>
 <body>
+
+  <!-- Minimal Notion Top Bar -->
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-logo">LG</div>
-      <div>
-        <h1>LangGraph Blocks Studio</h1>
-        <p id="backendStatus">Connected to Python compiler backend</p>
+    <div class="topbar-left">
+      <button id="toggleSidebarBtn" type="button" class="n-btn" title="Toggle sidebar">&#9776;</button>
+      <div class="breadcrumb">
+        <span>LangGraph Blocks Studio</span>
+        <span>/</span>
+        <strong id="crumbTitle">Untitled workflow</strong>
+        <span id="statusDot" class="status-dot" title="Connected to Python backend"></span>
       </div>
     </div>
 
-    <div class="controls">
-      <select id="presetSelect" class="select-input compact-select">
-        <option value="support_refund_hitl">Support Refund + HITL</option>
-        <option value="research_critique_loop">Research &amp; Critique Loop</option>
-        <option value="blank">Blank Canvas</option>
-      </select>
-
-      <div class="seg">
-        <button id="targetStateGraph" type="button" class="active">StateGraph</button>
-        <button id="targetFunctional" type="button">Functional API</button>
-      </div>
-
-      <button id="exportJsonBtn" type="button" class="btn">Export JSON</button>
-      <label class="btn" style="display:inline-flex;align-items:center;">
-        Import JSON
-        <input id="importJsonInput" type="file" accept=".json" class="hidden" />
-      </label>
-      <button id="themeToggleBtn" type="button" class="btn">Light / Dark</button>
-      <button id="runBtn" type="button" class="btn btn-primary">&#9654; Simulate Run</button>
+    <div class="topbar-right">
+      <button id="openInspectorBtn" type="button" class="n-btn">Inspector</button>
+      <button id="openCodeBtn" type="button" class="n-btn">Code</button>
+      <button id="openTraceBtn" type="button" class="n-btn">Run</button>
+      <button id="themeBtn" type="button" class="n-btn" title="Toggle dark/light theme">Theme</button>
+      <button id="runBtn" type="button" class="n-btn n-btn-primary">Simulate</button>
     </div>
   </header>
 
-  <div class="studio-grid">
-    <!-- Left Palette -->
-    <aside class="pane pane-left">
+  <div class="shell">
+    <!-- Left Sidebar -->
+    <aside id="sidebar" class="sidebar">
       <div>
-        <h2 class="section-title">Block Palette</h2>
-        <div id="slotBanner" class="empty-slot" style="padding:7px 10px;background:var(--card);">
-          <span>Target: <strong id="slotLabel">Main Flow</strong></span>
-          <button id="resetSlotBtn" type="button" class="link-btn hidden">Main</button>
-        </div>
+        <div class="side-group-label">Workspace</div>
+        <button id="newBlankBtn" type="button" class="side-item active">
+          <span>Untitled workflow</span>
+          <span style="font-size:12px;color:var(--faint);">Blank</span>
+        </button>
       </div>
-      <div id="palette"></div>
-      <div style="margin-top:auto;border-top:1px solid var(--border);padding-top:12px;">
-        <h3 class="section-title">Synthesized State</h3>
-        <div id="stateVars" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+
+      <div>
+        <div class="side-group-label">Starter Templates</div>
+        <button type="button" class="side-item preset-btn" data-preset="support_refund_hitl">
+          <span>Support Refund + HITL</span>
+        </button>
+        <button type="button" class="side-item preset-btn" data-preset="research_critique_loop">
+          <span>Research &amp; Critique</span>
+        </button>
+      </div>
+
+      <div>
+        <div class="side-group-label">State Keys</div>
+        <div id="stateKeys" style="padding:2px 8px;display:flex;flex-wrap:wrap;gap:5px;"></div>
+      </div>
+
+      <div class="side-footer">
+        <button id="exportBtn" type="button" class="side-item">Export JSON</button>
+        <label class="side-item" style="cursor:pointer;">
+          <span>Import JSON</span>
+          <input id="importInput" type="file" accept=".json" class="hidden" />
+        </label>
       </div>
     </aside>
 
-    <!-- Center Canvas -->
-    <main class="pane pane-center">
-      <div id="hitlBanner" class="hitl-banner hidden">
-        <div>
-          <strong style="font-size:13px;">Paused at interrupt() — Human Approval Required</strong>
-          <div id="hitlPrompt" style="font-size:12px;color:var(--muted);margin-top:4px;"></div>
+    <!-- Center Blank Dark Canvas -->
+    <main class="canvas-scroll" id="canvasScroll">
+      <div class="page-sheet">
+        <input
+          id="pageTitleInput"
+          class="page-title-input"
+          type="text"
+          value="Untitled workflow"
+          placeholder="Untitled workflow"
+        />
+
+        <!-- Notion-style Page Properties -->
+        <div class="props-table">
+          <div class="prop-label">Trigger</div>
+          <div class="prop-value" style="padding-left:6px;color:var(--fg);">On Message</div>
+
+          <div class="prop-label">Input key</div>
+          <div class="prop-value">
+            <input id="propInputVar" class="prop-inline-input" type="text" value="user_query" />
+          </div>
+
+          <div class="prop-label">Checkpointer</div>
+          <div class="prop-value">
+            <select id="propCheckpointer" class="prop-inline-select">
+              <option value="MemorySaver">MemorySaver</option>
+              <option value="PostgresSaver">PostgresSaver</option>
+              <option value="SqliteSaver">SqliteSaver</option>
+            </select>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;flex-shrink:0;">
-          <button id="approveBtn" type="button" class="btn btn-success">Approve</button>
-          <button id="rejectBtn" type="button" class="btn btn-danger">Reject</button>
+
+        <!-- HITL Interrupt Banner -->
+        <div id="hitlCallout" class="hitl-callout hidden">
+          <div>
+            <div style="font-weight:600;font-size:13px;">Paused at interrupt() — Approval needed</div>
+            <div id="hitlQuestion" style="font-size:12px;color:var(--muted);margin-top:2px;"></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button id="approveBtn" type="button" class="n-btn n-btn-approve">Approve</button>
+            <button id="rejectBtn" type="button" class="n-btn n-btn-reject">Reject</button>
+          </div>
         </div>
+
+        <!-- Block Flow -->
+        <div id="blockTree" class="block-stack"></div>
+
+        <!-- Root Add / Slash Prompt -->
+        <div id="emptyHint" class="empty-canvas-hint">
+          Blank canvas ready. Click below or press <code>/</code> to insert your first block.
+        </div>
+        <button id="rootSlashBtn" type="button" class="slash-prompt">
+          <span>+</span>
+          <span>Add a block, or press <code>/</code></span>
+        </button>
       </div>
-      <div id="canvas"></div>
     </main>
 
-    <!-- Right Inspector / Compiler / Trace -->
-    <section class="pane-right">
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="inspector">Inspector</button>
-        <button class="tab-btn" data-tab="code">Compiled Python</button>
-        <button class="tab-btn" data-tab="trace">Run &amp; State</button>
-      </div>
-      <div id="tab-inspector" class="tab-body"></div>
-      <div id="tab-code" class="tab-body hidden">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <strong id="codeTitle" style="font-size:13px;">Compiled Python</strong>
-          <button id="copyCodeBtn" type="button" class="btn">Copy</button>
+    <!-- Right Collapsible Drawer -->
+    <aside id="drawer" class="drawer collapsed">
+      <div class="drawer-tabs">
+        <div class="drawer-tab-group">
+          <button class="d-tab active" data-dtab="inspector">Inspector</button>
+          <button class="d-tab" data-dtab="code">Python</button>
+          <button class="d-tab" data-dtab="trace">Run</button>
         </div>
-        <pre id="codeOutput" class="code-box"></pre>
+        <button id="closeDrawerBtn" type="button" class="icon-btn" title="Close panel">&times;</button>
       </div>
-      <div id="tab-trace" class="tab-body hidden">
+
+      <div id="dtab-inspector" class="drawer-body"></div>
+
+      <div id="dtab-code" class="drawer-body hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
+          <div class="seg">
+            <button id="targetSgBtn" type="button" class="active">StateGraph</button>
+            <button id="targetFnBtn" type="button">Functional</button>
+          </div>
+          <button id="copyCodeBtn" type="button" class="n-btn n-btn-outline">Copy</button>
+        </div>
+        <pre id="compiledCode" class="code-block"></pre>
+      </div>
+
+      <div id="dtab-trace" class="drawer-body hidden">
         <div class="field">
           <label for="simInput">Test Input (user_query)</label>
-          <input id="simInput" class="text-input" type="text" value="I was charged twice on order #8492, please refund $49." />
+          <input id="simInput" class="n-input" type="text" value="I was charged twice on order #8492, please refund $49." />
         </div>
-        <h3 class="section-title">Execution Trace</h3>
-        <div id="traceList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
-        <h3 class="section-title">Thread State</h3>
-        <pre id="traceState" class="code-box">{}</pre>
+        <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;">Execution Steps</div>
+        <div id="traceSteps" style="margin-bottom:14px;"></div>
+        <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;">Thread State</div>
+        <pre id="traceState" class="code-block">{}</pre>
       </div>
-    </section>
+    </aside>
+  </div>
+
+  <!-- Notion-Style Slash Command Menu -->
+  <div id="slashMenu" class="slash-menu hidden">
+    <input id="slashSearch" class="slash-search" type="text" placeholder="Filter blocks..." />
+    <div id="slashItems" class="slash-items"></div>
   </div>
 
   <script>
-    const BLOCK_CATALOG = [
-      { type: "ask_llm", title: "Ask LLM", cat: "cognitive", container: false, defaults: () => ({ name: "classify_intent", model: "gpt-4.1-mini", output_format: "structured", context_mode: "thread_messages", output_var: "intent", prompt: "Classify {{user_query}}." }) },
-      { type: "agent_loop", title: "Agent Tool Loop", cat: "cognitive", container: false, defaults: () => ({ name: "research_agent", model: "claude-sonnet", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} with tools." }) },
-      { type: "if_else", title: "If / Else Branch", cat: "control", container: true, branches: [["then", "If True"], ["else", "Else"]], defaults: () => ({ left_var: "intent", operator: "==", right_val: "refund" }) },
-      { type: "repeat_until", title: "Repeat Until (Bounded)", cat: "control", container: true, branches: [["body", "Do Repeat"]], defaults: () => ({ condition_var: "quality_score", operator: ">=", target_val: "8", max_iterations: 3 }) },
-      { type: "parallel", title: "Parallel Branches", cat: "control", container: true, branches: [["laneA", "Branch A"], ["laneB", "Branch B"]], defaults: () => ({ label: "Fan-out & Join" }) },
-      { type: "human_approval", title: "Human Approval", cat: "human", container: true, branches: [["approved", "On Approved"], ["rejected", "On Rejected"]], defaults: () => ({ question: "Approve action for {{user_query}}?", output_var: "approval" }) },
-      { type: "call_tool", title: "Call Tool", cat: "tools", container: false, defaults: () => ({ tool_name: "lookup_order", arg_expr: "{{user_query}}", output_var: "tool_result" }) },
-      { type: "respond", title: "Final Reply", cat: "trigger", container: false, defaults: () => ({ template: "Result: {{tool_result}}", output_var: "final_response" }) }
+    const BLOCK_DEFS = [
+      { type: "ask_llm", title: "Ask LLM", desc: "Prompt a model and save text or structured output", cat: "cognitive", container: false, defaults: () => ({ name: "llm_step", model: "gpt-4.1-mini", output_format: "structured", context_mode: "thread_messages", output_var: "llm_result", prompt: "Analyze {{user_query}}." }) },
+      { type: "agent_loop", title: "Agent Tool Loop", desc: "Bounded ReAct loop with tool access", cat: "cognitive", container: false, defaults: () => ({ name: "agent_step", model: "claude-sonnet", tools: "search_kb", max_steps: 5, output_var: "agent_draft", prompt: "Solve {{user_query}} using available tools." }) },
+      { type: "if_else", title: "If / Else", desc: "Branch execution on a state variable condition", cat: "control", container: true, branches: [["then", "If true"], ["else", "Else"]], defaults: () => ({ left_var: "intent", operator: "==", right_val: "refund" }) },
+      { type: "repeat_until", title: "Repeat Until", desc: "Bounded critique/retry loop with max iterations", cat: "control", container: true, branches: [["body", "Loop body"]], defaults: () => ({ condition_var: "quality_score", operator: ">=", target_val: "8", max_iterations: 3 }) },
+      { type: "parallel", title: "Parallel", desc: "Run two branches concurrently and join into State", cat: "control", container: true, branches: [["laneA", "Branch A"], ["laneB", "Branch B"]], defaults: () => ({ label: "Parallel stage" }) },
+      { type: "human_approval", title: "Human Approval", desc: "Pause at interrupt() and branch on Approve / Reject", cat: "human", container: true, branches: [["approved", "On approved"], ["rejected", "On rejected"]], defaults: () => ({ question: "Approve action for {{user_query}}?", output_var: "approval" }) },
+      { type: "call_tool", title: "Call Tool", desc: "Invoke a registered Python tool function", cat: "tools", container: false, defaults: () => ({ tool_name: "lookup_order", arg_expr: "{{user_query}}", output_var: "tool_result" }) },
+      { type: "respond", title: "Final Reply", desc: "Format and write the final workflow response", cat: "trigger", container: false, defaults: () => ({ template: "Done: {{llm_result}}", output_var: "final_response" }) }
     ];
+    const DEF_MAP = Object.fromEntries(BLOCK_DEFS.map(d => [d.type, d]));
 
-    const CAT_MAP = Object.fromEntries(BLOCK_CATALOG.map(b => [b.type, b]));
-    let idSeq = 200;
-    const nextId = (prefix) => `${prefix}_${++idSeq}`;
+    let idCounter = 300;
+    const nextId = (p) => `${p}_${++idCounter}`;
 
-    let presetsCache = {};
-    let app = {
+    let presets = {};
+    const state = {
+      activeDocKey: "blank",
+      pageTitle: "Untitled workflow",
       workflow: {
         version: "0.1",
-        trigger: { name: "custom_agent_flow", input_var: "user_query", checkpointer: "MemorySaver" },
+        trigger: { name: "untitled_workflow", input_var: "user_query", checkpointer: "MemorySaver" },
         blocks: []
       },
+      selectedId: null,
+      drawerOpen: false,
+      drawerTab: "inspector",
       target: "stategraph",
-      selectedId: "trigger",
-      activeTab: "inspector",
-      activeSlot: { parentId: null, branchKey: null },
       compiledCode: "",
       stateVars: ["user_query"],
-      sim: { status: "idle", activeBlockId: null, trace: [], state: {}, resumeToken: null, question: "" }
+      slashTarget: { parentId: null, branchKey: null },
+      slashIndex: 0,
+      sim: { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" }
     };
 
-    function findNode(id, list = app.workflow.blocks, parent = null, branchKey = null) {
+    function sanitizeName(raw) {
+      return (raw || "untitled_workflow").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") || "untitled_workflow";
+    }
+
+    function findNode(id, list = state.workflow.blocks) {
       for (let i = 0; i < list.length; i++) {
         const blk = list[i];
-        if (blk.id === id) return { blk, list, idx: i, parent, branchKey };
+        if (blk.id === id) return { blk, list, idx: i };
         if (blk.branches) {
           for (const k of Object.keys(blk.branches)) {
-            const res = findNode(id, blk.branches[k], blk, k);
+            const res = findNode(id, blk.branches[k]);
             if (res) return res;
           }
         }
@@ -477,40 +912,45 @@
         const res = await fetch("/api/compile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workflow: app.workflow, target: app.target })
+          body: JSON.stringify({ workflow: state.workflow, target: state.target })
         });
         const data = await res.json();
         if (res.ok) {
-          app.compiledCode = data.code;
-          app.stateVars = data.state_vars || [];
+          state.compiledCode = data.code;
+          state.stateVars = data.state_vars || [];
+          document.getElementById("statusDot").style.background = "#4caf7d";
         } else {
-          app.compiledCode = `# Validation error:\n# ${(data.errors || [data.error]).join("\n# ")}`;
+          state.compiledCode = `# Validation error:\n# ${(data.errors || [data.error]).join("\n# ")}`;
         }
       } catch (_err) {
-        app.compiledCode = "# Start with `langgraph-blocks studio` to enable live Python compilation.";
-        document.getElementById("backendStatus").textContent = "Offline preview (start via `langgraph-blocks studio`)";
+        state.compiledCode = "# Start via `langgraph-blocks studio` to connect Python compiler.";
+        document.getElementById("statusDot").style.background = "#d46b7a";
       }
-      renderCodeAndVars();
+      renderSidebarAndCode();
     }
 
     function insertBlock(type) {
-      const def = CAT_MAP[type];
-      const node = { id: nextId(type), type, config: def.defaults() };
+      const def = DEF_MAP[type];
+      const blk = { id: nextId(type), type, config: def.defaults() };
       if (def.container) {
-        node.branches = {};
-        for (const [k] of def.branches) node.branches[k] = [];
+        blk.branches = {};
+        for (const [k] of def.branches) blk.branches[k] = [];
       }
-      if (app.activeSlot.parentId && app.activeSlot.branchKey) {
-        const found = findNode(app.activeSlot.parentId);
-        if (found?.blk.branches?.[app.activeSlot.branchKey]) {
-          found.blk.branches[app.activeSlot.branchKey].push(node);
+      const { parentId, branchKey } = state.slashTarget;
+      if (parentId && branchKey) {
+        const found = findNode(parentId);
+        if (found?.blk.branches?.[branchKey]) {
+          found.blk.branches[branchKey].push(blk);
         } else {
-          app.workflow.blocks.push(node);
+          state.workflow.blocks.push(blk);
         }
       } else {
-        app.workflow.blocks.push(node);
+        state.workflow.blocks.push(blk);
       }
-      app.selectedId = node.id;
+      state.selectedId = blk.id;
+      state.drawerOpen = true;
+      state.drawerTab = "inspector";
+      closeSlashMenu();
       renderAll();
       syncCompile();
     }
@@ -530,147 +970,101 @@
       const found = findNode(id);
       if (!found) return;
       found.list.splice(found.idx, 1);
-      if (app.selectedId === id) app.selectedId = app.workflow.blocks[0]?.id || "trigger";
-      if (app.activeSlot.parentId === id) app.activeSlot = { parentId: null, branchKey: null };
+      if (state.selectedId === id) state.selectedId = null;
       renderAll();
       syncCompile();
     }
 
-    function renderPalette() {
-      const el = document.getElementById("palette");
-      el.innerHTML = BLOCK_CATALOG.map(b => `
-        <button type="button" class="palette-btn cat-${b.cat}" data-add="${b.type}">
-          <div>
-            <div style="font-weight:700;font-size:12px;">${b.title}</div>
-            <div style="font-size:12px;color:var(--muted);">${b.container ? "Container" : "Action"}</div>
-          </div>
-          <span style="color:var(--primary);font-weight:700;font-size:12px;">+ Add</span>
-        </button>
-      `).join("");
-      el.querySelectorAll("[data-add]").forEach(btn => {
-        btn.addEventListener("click", () => insertBlock(btn.getAttribute("data-add")));
-      });
-
-      const slotLbl = document.getElementById("slotLabel");
-      const resetBtn = document.getElementById("resetSlotBtn");
-      if (app.activeSlot.parentId) {
-        const found = findNode(app.activeSlot.parentId);
-        const def = found ? CAT_MAP[found.blk.type] : null;
-        slotLbl.textContent = `${def ? def.title : "Block"} -> ${app.activeSlot.branchKey}`;
-        resetBtn.classList.remove("hidden");
-      } else {
-        slotLbl.textContent = "Main Flow";
-        resetBtn.classList.add("hidden");
-      }
-    }
-
-    function summaryText(blk) {
+    function summarize(blk) {
       const c = blk.config;
-      if (blk.type === "ask_llm") return `${c.name} (${c.model}) -> <span class="var-pill">${c.output_var}</span>`;
-      if (blk.type === "agent_loop") return `Tools [${c.tools}] max ${c.max_steps} -> <span class="var-pill">${c.output_var}</span>`;
-      if (blk.type === "if_else") return `If <span class="var-pill">${c.left_var}</span> ${c.operator} "${c.right_val}"`;
-      if (blk.type === "repeat_until") return `Until <span class="var-pill">${c.condition_var}</span> ${c.operator} ${c.target_val} (max ${c.max_iterations})`;
-      if (blk.type === "parallel") return `Run concurrent branches, join into State`;
-      if (blk.type === "human_approval") return `Pause interrupt() -> <span class="var-pill">${c.output_var}</span>`;
-      if (blk.type === "call_tool") return `${c.tool_name}(${c.arg_expr}) -> <span class="var-pill">${c.output_var}</span>`;
-      if (blk.type === "respond") return `Return ${c.template}`;
+      if (blk.type === "ask_llm") return `${c.name} · ${c.model} → <span class="var-chip">${c.output_var}</span>`;
+      if (blk.type === "agent_loop") return `${c.name} · tools [${c.tools}] · max ${c.max_steps} → <span class="var-chip">${c.output_var}</span>`;
+      if (blk.type === "if_else") return `If <span class="var-chip">${c.left_var}</span> ${c.operator} "${c.right_val}"`;
+      if (blk.type === "repeat_until") return `Until <span class="var-chip">${c.condition_var}</span> ${c.operator} ${c.target_val} (max ${c.max_iterations})`;
+      if (blk.type === "parallel") return `Run branches concurrently`;
+      if (blk.type === "human_approval") return `Pause interrupt() → <span class="var-chip">${c.output_var}</span>`;
+      if (blk.type === "call_tool") return `${c.tool_name}(${c.arg_expr}) → <span class="var-chip">${c.output_var}</span>`;
+      if (blk.type === "respond") return `${c.template} → <span class="var-chip">${c.output_var}</span>`;
       return "";
     }
 
-    function renderList(blocks, parentId = null, branchKey = null) {
-      if (!blocks.length) {
-        const isTarget = app.activeSlot.parentId === parentId && app.activeSlot.branchKey === branchKey;
-        return `<div class="empty-slot ${isTarget ? "active-slot" : ""}">
-          <span>Empty branch</span>
-          <button type="button" class="link-btn slot-pick" data-p="${parentId || ""}" data-b="${branchKey || ""}">
-            ${isTarget ? "Inserting Here" : "+ Insert Here"}
-          </button>
-        </div>`;
-      }
-      return blocks.map((blk, i) => {
-        const def = CAT_MAP[blk.type];
-        const cls = app.sim.activeBlockId === blk.id
-          ? (app.sim.status === "paused" ? "paused" : "running")
-          : (app.selectedId === blk.id ? "selected" : "");
-        let childHtml = "";
+    function renderTree(blocks) {
+      return blocks.map(blk => {
+        const def = DEF_MAP[blk.type];
+        const cls = state.sim.activeBlockId === blk.id
+          ? (state.sim.status === "paused" ? "paused" : "running")
+          : (state.selectedId === blk.id ? "selected" : "");
+
+        let branchesHtml = "";
         if (def.container) {
-          childHtml = def.branches.map(([bKey, bLabel]) => {
-            const isTarget = app.activeSlot.parentId === blk.id && app.activeSlot.branchKey === bKey;
-            return `<div class="branch-box">
-              <div class="branch-header">
+          branchesHtml = `<div class="branches-wrap">` + def.branches.map(([bKey, bLabel]) => {
+            const children = blk.branches[bKey] || [];
+            return `<div>
+              <div class="branch-group-label">
                 <span>${bLabel}</span>
-                <button type="button" class="link-btn slot-pick" data-p="${blk.id}" data-b="${bKey}">
-                  ${isTarget ? "Inserting Here" : "+ Insert Here"}
-                </button>
               </div>
-              ${renderList(blk.branches[bKey] || [], blk.id, bKey)}
+              <div class="block-stack">${renderTree(children)}</div>
+              <button type="button" class="slash-prompt slash-prompt-inline open-slash" data-p="${blk.id}" data-b="${bKey}">
+                <span>+</span><span>Add block to ${bLabel.toLowerCase()}</span>
+              </button>
             </div>`;
-          }).join("");
+          }).join("") + `</div>`;
         }
-        return `
-          ${i > 0 ? '<div class="notch"><svg width="24" height="10" viewBox="0 0 24 10"><path d="M0 0 H6 L9 6 H15 L18 0 H24" fill="none" stroke="var(--border)" stroke-width="1.5"/></svg></div>' : ""}
-          <div class="block-card cat-${def.cat} ${cls}" data-select="${blk.id}">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-                <span class="badge bg-${def.cat}">${def.title}</span>
-                <span style="font-size:12px;color:var(--muted);">${summaryText(blk)}</span>
-              </div>
-              <div style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
-                <button type="button" class="mini-btn mv-up" data-id="${blk.id}">&uarr;</button>
-                <button type="button" class="mini-btn mv-dn" data-id="${blk.id}">&darr;</button>
-                <button type="button" class="mini-btn rm-blk" data-id="${blk.id}" style="color:var(--accent-rose);">&times;</button>
-              </div>
+
+        return `<div class="block-row ${cls}" data-blk="${blk.id}">
+          <span class="block-handle" title="Block">&#8942;&#8942;</span>
+          <div class="block-header">
+            <div class="block-main">
+              <span class="tag tag-${def.cat}">${def.title}</span>
+              <span class="block-summary">${summarize(blk)}</span>
             </div>
-            ${childHtml}
-          </div>`;
+            <div class="block-actions" onclick="event.stopPropagation()">
+              <button type="button" class="icon-btn mv-up" data-id="${blk.id}" title="Move up">&uarr;</button>
+              <button type="button" class="icon-btn mv-dn" data-id="${blk.id}" title="Move down">&darr;</button>
+              <button type="button" class="icon-btn rm-blk" data-id="${blk.id}" title="Delete">&times;</button>
+            </div>
+          </div>
+          ${branchesHtml}
+        </div>`;
       }).join("");
     }
 
     function renderCanvas() {
-      const trig = app.workflow.trigger;
-      const trigCls = app.selectedId === "trigger" ? "selected" : "";
-      const hat = `<div class="block-card cat-trigger ${trigCls}" data-select="trigger">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span class="badge bg-trigger">On Message (Trigger)</span>
-            <strong>${trig.name}</strong>
-            <span class="var-pill">${trig.input_var}</span>
-          </div>
-          <span style="font-size:12px;color:var(--muted);">Checkpointer: <strong>${trig.checkpointer}</strong></span>
-        </div>
-      </div>`;
+      document.getElementById("crumbTitle").textContent = state.pageTitle;
+      document.getElementById("pageTitleInput").value = state.pageTitle;
+      document.getElementById("propInputVar").value = state.workflow.trigger.input_var;
+      document.getElementById("propCheckpointer").value = state.workflow.trigger.checkpointer;
 
-      const footer = `<div style="margin-top:12px;text-align:center;">
-        <button type="button" class="btn slot-pick" data-p="" data-b="">
-          ${!app.activeSlot.parentId ? "Active Target: Main Flow End" : "+ Target Main Flow End"}
-        </button>
-      </div>`;
+      const isEmpty = state.workflow.blocks.length === 0;
+      document.getElementById("emptyHint").classList.toggle("hidden", !isEmpty);
 
-      const canvas = document.getElementById("canvas");
-      canvas.innerHTML = hat + '<div class="notch"></div>' + renderList(app.workflow.blocks) + footer;
+      const treeEl = document.getElementById("blockTree");
+      treeEl.innerHTML = renderTree(state.workflow.blocks);
 
-      canvas.querySelectorAll("[data-select]").forEach(el => {
+      treeEl.querySelectorAll("[data-blk]").forEach(el => {
         el.addEventListener("click", (e) => {
           e.stopPropagation();
-          app.selectedId = el.getAttribute("data-select");
-          app.activeTab = "inspector";
+          state.selectedId = el.getAttribute("data-blk");
+          state.drawerOpen = true;
+          state.drawerTab = "inspector";
           renderAll();
         });
       });
-      canvas.querySelectorAll(".slot-pick").forEach(btn => {
+
+      treeEl.querySelectorAll(".open-slash").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
-          app.activeSlot = { parentId: btn.getAttribute("data-p") || null, branchKey: btn.getAttribute("data-b") || null };
-          renderAll();
+          openSlashMenu(btn, btn.getAttribute("data-p"), btn.getAttribute("data-b"));
         });
       });
-      canvas.querySelectorAll(".mv-up").forEach(btn => btn.addEventListener("click", () => moveBlock(btn.getAttribute("data-id"), -1)));
-      canvas.querySelectorAll(".mv-dn").forEach(btn => btn.addEventListener("click", () => moveBlock(btn.getAttribute("data-id"), 1)));
-      canvas.querySelectorAll(".rm-blk").forEach(btn => btn.addEventListener("click", () => deleteBlock(btn.getAttribute("data-id"))));
 
-      const hitl = document.getElementById("hitlBanner");
-      if (app.sim.status === "paused") {
-        document.getElementById("hitlPrompt").textContent = app.sim.question;
+      treeEl.querySelectorAll(".mv-up").forEach(b => b.addEventListener("click", () => moveBlock(b.getAttribute("data-id"), -1)));
+      treeEl.querySelectorAll(".mv-dn").forEach(b => b.addEventListener("click", () => moveBlock(b.getAttribute("data-id"), 1)));
+      treeEl.querySelectorAll(".rm-blk").forEach(b => b.addEventListener("click", () => deleteBlock(b.getAttribute("data-id"))));
+
+      const hitl = document.getElementById("hitlCallout");
+      if (state.sim.status === "paused") {
+        document.getElementById("hitlQuestion").textContent = state.sim.question;
         hitl.classList.remove("hidden");
       } else {
         hitl.classList.add("hidden");
@@ -678,213 +1072,366 @@
     }
 
     function renderInspector() {
-      const box = document.getElementById("tab-inspector");
-      if (app.selectedId === "trigger") {
-        const t = app.workflow.trigger;
-        box.innerHTML = `
-          <div class="field"><label>Workflow Name</label><input class="text-input insp" data-k="name" value="${t.name}" /></div>
-          <div class="field"><label>Input Variable</label><input class="text-input insp" data-k="input_var" value="${t.input_var}" /></div>
-          <div class="field"><label>Checkpointer</label>
-            <select class="select-input insp" data-k="checkpointer">
-              ${["MemorySaver", "PostgresSaver", "SqliteSaver"].map(c => `<option ${c === t.checkpointer ? "selected" : ""}>${c}</option>`).join("")}
-            </select>
-          </div>`;
-        box.querySelectorAll(".insp").forEach(inp => inp.addEventListener("input", () => {
-          t[inp.getAttribute("data-k")] = inp.value;
-          renderCanvas();
-          syncCompile();
-        }));
-        return;
-      }
-
-      const found = findNode(app.selectedId);
+      const body = document.getElementById("dtab-inspector");
+      const found = state.selectedId ? findNode(state.selectedId) : null;
       if (!found) {
-        box.innerHTML = `<p style="color:var(--muted);">Select a block to inspect or edit.</p>`;
+        body.innerHTML = `<div style="color:var(--muted);font-size:13px;">Click any block on the canvas to edit its properties.</div>`;
         return;
       }
-      const c = found.blk.config;
-      const fields = Object.keys(c).map(k => {
+      const blk = found.blk;
+      const def = DEF_MAP[blk.type];
+      const cfg = blk.config;
+      const rows = Object.keys(cfg).map(k => {
         const isLong = k === "prompt" || k === "question" || k === "template";
         const isNum = k === "max_steps" || k === "max_iterations";
-        return `<div class="field"><label>${k}</label>${
-          isLong
-            ? `<textarea class="text-input insp" rows="3" data-k="${k}">${c[k]}</textarea>`
-            : `<input class="text-input insp" type="${isNum ? "number" : "text"}" data-k="${k}" value="${String(c[k]).replace(/"/g, "&quot;")}" />`
-        }</div>`;
+        return `<div class="field">
+          <label>${k}</label>
+          ${isLong
+            ? `<textarea class="n-textarea insp-f" rows="3" data-k="${k}">${cfg[k]}</textarea>`
+            : `<input class="n-input insp-f" type="${isNum ? "number" : "text"}" data-k="${k}" value="${String(cfg[k]).replace(/"/g, "&quot;")}" />`
+          }
+        </div>`;
       }).join("");
-      box.innerHTML = `<div style="margin-bottom:10px;font-weight:700;">${CAT_MAP[found.blk.type].title} (${found.blk.id})</div>${fields}`;
-      box.querySelectorAll(".insp").forEach(inp => inp.addEventListener("input", () => {
-        const k = inp.getAttribute("data-k");
-        c[k] = inp.type === "number" ? Math.max(1, Number(inp.value) || 1) : inp.value;
-        renderCanvas();
-        syncCompile();
-      }));
-    }
 
-    function renderCodeAndVars() {
-      document.getElementById("codeTitle").textContent =
-        app.target === "stategraph" ? "Compiled LangGraph (StateGraph API)" : "Compiled LangGraph (Functional API)";
-      document.getElementById("codeOutput").textContent = app.compiledCode;
-      document.getElementById("stateVars").innerHTML = app.stateVars.map(v => `<span class="var-pill">${v}</span>`).join("");
-    }
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <span class="tag tag-${def.cat}">${def.title}</span>
+          <span style="font-size:12px;color:var(--muted);font-family:ui-monospace,monospace;">${blk.id}</span>
+        </div>
+        ${rows}
+      `;
 
-    function renderTabsAndTrace() {
-      document.querySelectorAll(".tab-btn").forEach(btn => {
-        const tab = btn.getAttribute("data-tab");
-        btn.classList.toggle("active", tab === app.activeTab);
-        document.getElementById(`tab-${tab}`).classList.toggle("hidden", tab !== app.activeTab);
+      body.querySelectorAll(".insp-f").forEach(inp => {
+        inp.addEventListener("input", () => {
+          const k = inp.getAttribute("data-k");
+          cfg[k] = inp.type === "number" ? Math.max(1, Number(inp.value) || 1) : inp.value;
+          renderCanvas();
+          syncCompile();
+        });
       });
-      document.getElementById("targetStateGraph").classList.toggle("active", app.target === "stategraph");
-      document.getElementById("targetFunctional").classList.toggle("active", app.target === "functional");
+    }
 
-      const list = document.getElementById("traceList");
-      list.innerHTML = app.sim.trace.length
-        ? app.sim.trace.map((t, idx) => `
-            <div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg);">
-              <div style="font-weight:700;font-size:12px;">${idx + 1}. ${t.label}</div>
+    function renderSidebarAndCode() {
+      document.getElementById("newBlankBtn").classList.toggle("active", state.activeDocKey === "blank");
+      document.querySelectorAll(".preset-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.getAttribute("data-preset") === state.activeDocKey);
+      });
+
+      document.getElementById("stateKeys").innerHTML = state.stateVars
+        .map(v => `<span class="var-chip">${v}</span>`)
+        .join("");
+      document.getElementById("compiledCode").textContent = state.compiledCode;
+    }
+
+    function renderDrawerChrome() {
+      const drawer = document.getElementById("drawer");
+      drawer.classList.toggle("collapsed", !state.drawerOpen);
+
+      document.getElementById("openInspectorBtn").classList.toggle("active", state.drawerOpen && state.drawerTab === "inspector");
+      document.getElementById("openCodeBtn").classList.toggle("active", state.drawerOpen && state.drawerTab === "code");
+      document.getElementById("openTraceBtn").classList.toggle("active", state.drawerOpen && state.drawerTab === "trace");
+
+      document.querySelectorAll(".d-tab").forEach(btn => {
+        const t = btn.getAttribute("data-dtab");
+        btn.classList.toggle("active", t === state.drawerTab);
+        document.getElementById(`dtab-${t}`).classList.toggle("hidden", t !== state.drawerTab);
+      });
+
+      document.getElementById("targetSgBtn").classList.toggle("active", state.target === "stategraph");
+      document.getElementById("targetFnBtn").classList.toggle("active", state.target === "functional");
+
+      const traceList = document.getElementById("traceSteps");
+      traceList.innerHTML = state.sim.trace.length
+        ? state.sim.trace.map((t, i) => `
+            <div class="trace-item">
+              <div style="font-weight:600;font-size:12px;">${i + 1}. ${t.label}</div>
               <div style="font-size:12px;color:var(--muted);">${t.detail}</div>
             </div>`).join("")
-        : `<div style="color:var(--muted);font-size:12px;">Click Simulate Run to execute the workflow.</div>`;
-      document.getElementById("traceState").textContent = JSON.stringify(app.sim.state, null, 2);
+        : `<div style="color:var(--muted);font-size:12px;">Click Simulate in the top bar to run.</div>`;
+      document.getElementById("traceState").textContent = JSON.stringify(state.sim.threadState, null, 2);
     }
 
     function renderAll() {
-      renderPalette();
       renderCanvas();
       renderInspector();
-      renderCodeAndVars();
-      renderTabsAndTrace();
+      renderSidebarAndCode();
+      renderDrawerChrome();
     }
 
-    async function loadPresets() {
-      try {
-        const res = await fetch("/api/examples");
-        const data = await res.json();
-        presetsCache = data.examples || {};
-        if (presetsCache.support_refund_hitl) {
-          app.workflow = structuredClone(presetsCache.support_refund_hitl);
-          app.selectedId = app.workflow.blocks[0]?.id || "trigger";
-        }
-      } catch (_err) {
-        presetsCache = {};
+    // =========================================================================
+    // SLASH COMMAND POPOVER
+    // =========================================================================
+    function renderSlashItems(filter = "") {
+      const q = filter.trim().toLowerCase();
+      const filtered = BLOCK_DEFS.filter(b =>
+        b.title.toLowerCase().includes(q) || b.desc.toLowerCase().includes(q)
+      );
+      if (state.slashIndex >= filtered.length) state.slashIndex = 0;
+
+      const list = document.getElementById("slashItems");
+      if (!filtered.length) {
+        list.innerHTML = `<div style="padding:10px;color:var(--muted);font-size:12px;">No matching blocks</div>`;
+        return filtered;
       }
-      renderAll();
-      syncCompile();
+      list.innerHTML = filtered.map((b, i) => `
+        <button type="button" class="slash-item ${i === state.slashIndex ? "active" : ""}" data-type="${b.type}">
+          <div>
+            <div class="slash-item-title">${b.title}</div>
+            <div class="slash-item-desc">${b.desc}</div>
+          </div>
+          <span class="tag tag-${b.cat}">${b.container ? "Block" : "Step"}</span>
+        </button>`).join("");
+
+      list.querySelectorAll(".slash-item").forEach(btn => {
+        btn.addEventListener("click", () => insertBlock(btn.getAttribute("data-type")));
+      });
+      return filtered;
     }
 
-    document.getElementById("presetSelect").addEventListener("change", (e) => {
-      const key = e.target.value;
-      app.sim = { status: "idle", activeBlockId: null, trace: [], state: {}, resumeToken: null, question: "" };
-      app.activeSlot = { parentId: null, branchKey: null };
-      if (key === "blank") {
-        app.workflow = { version: "0.1", trigger: { name: "custom_agent_flow", input_var: "user_query", checkpointer: "MemorySaver" }, blocks: [] };
-      } else if (presetsCache[key]) {
-        app.workflow = structuredClone(presetsCache[key]);
+    function openSlashMenu(anchorEl, parentId = null, branchKey = null) {
+      state.slashTarget = { parentId, branchKey };
+      state.slashIndex = 0;
+      const menu = document.getElementById("slashMenu");
+      const search = document.getElementById("slashSearch");
+      search.value = "";
+      renderSlashItems("");
+
+      const rect = anchorEl.getBoundingClientRect();
+      const top = Math.min(window.innerHeight - 370, rect.bottom + 4);
+      const left = Math.min(window.innerWidth - 324, Math.max(12, rect.left + 24));
+      menu.style.top = `${Math.max(12, top)}px`;
+      menu.style.left = `${left}px`;
+      menu.classList.remove("hidden");
+      search.focus();
+    }
+
+    function closeSlashMenu() {
+      document.getElementById("slashMenu").classList.add("hidden");
+    }
+
+    document.getElementById("slashSearch").addEventListener("input", (e) => {
+      state.slashIndex = 0;
+      renderSlashItems(e.target.value);
+    });
+
+    document.getElementById("slashSearch").addEventListener("keydown", (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      const filtered = BLOCK_DEFS.filter(b => b.title.toLowerCase().includes(q) || b.desc.toLowerCase().includes(q));
+      if (e.key === "Escape") {
+        closeSlashMenu();
+        return;
       }
-      app.selectedId = app.workflow.blocks[0]?.id || "trigger";
-      renderAll();
-      syncCompile();
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        state.slashIndex = filtered.length ? (state.slashIndex + 1) % filtered.length : 0;
+        renderSlashItems(e.target.value);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        state.slashIndex = filtered.length ? (state.slashIndex - 1 + filtered.length) % filtered.length : 0;
+        renderSlashItems(e.target.value);
+      } else if (e.key === "Enter" && filtered[state.slashIndex]) {
+        e.preventDefault();
+        insertBlock(filtered[state.slashIndex].type);
+      }
     });
 
-    document.getElementById("targetStateGraph").addEventListener("click", () => {
-      app.target = "stategraph";
-      app.activeTab = "code";
-      renderTabsAndTrace();
-      syncCompile();
+    document.addEventListener("keydown", (e) => {
+      const tag = document.activeElement?.tagName;
+      const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      if (!isTyping && e.key === "/") {
+        e.preventDefault();
+        openSlashMenu(document.getElementById("rootSlashBtn"), null, null);
+      }
     });
 
-    document.getElementById("targetFunctional").addEventListener("click", () => {
-      app.target = "functional";
-      app.activeTab = "code";
-      renderTabsAndTrace();
-      syncCompile();
+    document.addEventListener("click", (e) => {
+      const menu = document.getElementById("slashMenu");
+      if (!menu.classList.contains("hidden") && !menu.contains(e.target) && !e.target.closest("#rootSlashBtn") && !e.target.closest(".open-slash")) {
+        closeSlashMenu();
+      }
     });
 
-    document.querySelectorAll(".tab-btn").forEach(btn => {
+    document.getElementById("rootSlashBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openSlashMenu(e.currentTarget, null, null);
+    });
+
+    // =========================================================================
+    // HEADER / SIDEBAR / DRAWER / SIMULATION CONTROLS
+    // =========================================================================
+    document.getElementById("toggleSidebarBtn").addEventListener("click", () => {
+      document.getElementById("sidebar").classList.toggle("collapsed");
+    });
+
+    function openDrawer(tab) {
+      if (state.drawerOpen && state.drawerTab === tab) {
+        state.drawerOpen = false;
+      } else {
+        state.drawerOpen = true;
+        state.drawerTab = tab;
+      }
+      renderDrawerChrome();
+    }
+
+    document.getElementById("openInspectorBtn").addEventListener("click", () => openDrawer("inspector"));
+    document.getElementById("openCodeBtn").addEventListener("click", () => openDrawer("code"));
+    document.getElementById("openTraceBtn").addEventListener("click", () => openDrawer("trace"));
+    document.getElementById("closeDrawerBtn").addEventListener("click", () => {
+      state.drawerOpen = false;
+      renderDrawerChrome();
+    });
+
+    document.querySelectorAll(".d-tab").forEach(btn => {
       btn.addEventListener("click", () => {
-        app.activeTab = btn.getAttribute("data-tab");
-        renderTabsAndTrace();
+        state.drawerTab = btn.getAttribute("data-dtab");
+        renderDrawerChrome();
       });
     });
 
-    document.getElementById("resetSlotBtn").addEventListener("click", () => {
-      app.activeSlot = { parentId: null, branchKey: null };
-      renderAll();
+    document.getElementById("targetSgBtn").addEventListener("click", () => {
+      state.target = "stategraph";
+      renderDrawerChrome();
+      syncCompile();
+    });
+    document.getElementById("targetFnBtn").addEventListener("click", () => {
+      state.target = "functional";
+      renderDrawerChrome();
+      syncCompile();
     });
 
-    document.getElementById("themeToggleBtn").addEventListener("click", () => {
+    document.getElementById("themeBtn").addEventListener("click", () => {
       const html = document.documentElement;
       html.setAttribute("data-theme", html.getAttribute("data-theme") === "dark" ? "light" : "dark");
     });
 
-    document.getElementById("copyCodeBtn").addEventListener("click", () => {
-      navigator.clipboard?.writeText(app.compiledCode);
-      const btn = document.getElementById("copyCodeBtn");
-      btn.textContent = "Copied!";
-      setTimeout(() => { btn.textContent = "Copy"; }, 1000);
+    document.getElementById("pageTitleInput").addEventListener("input", (e) => {
+      state.pageTitle = e.target.value || "Untitled workflow";
+      state.workflow.trigger.name = sanitizeName(state.pageTitle);
+      document.getElementById("crumbTitle").textContent = state.pageTitle;
+      syncCompile();
     });
 
-    document.getElementById("exportJsonBtn").addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(app.workflow, null, 2)], { type: "application/json" });
+    document.getElementById("propInputVar").addEventListener("input", (e) => {
+      state.workflow.trigger.input_var = e.target.value || "user_query";
+      syncCompile();
+    });
+
+    document.getElementById("propCheckpointer").addEventListener("change", (e) => {
+      state.workflow.trigger.checkpointer = e.target.value;
+      syncCompile();
+    });
+
+    document.getElementById("newBlankBtn").addEventListener("click", () => {
+      state.activeDocKey = "blank";
+      state.pageTitle = "Untitled workflow";
+      state.workflow = {
+        version: "0.1",
+        trigger: { name: "untitled_workflow", input_var: "user_query", checkpointer: "MemorySaver" },
+        blocks: []
+      };
+      state.selectedId = null;
+      state.sim = { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" };
+      renderAll();
+      syncCompile();
+    });
+
+    document.querySelectorAll(".preset-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-preset");
+        if (!presets[key]) return;
+        state.activeDocKey = key;
+        state.workflow = structuredClone(presets[key]);
+        state.pageTitle = key === "support_refund_hitl" ? "Support Refund + HITL" : "Research & Critique";
+        state.selectedId = state.workflow.blocks[0]?.id || null;
+        state.sim = { status: "idle", activeBlockId: null, trace: [], threadState: {}, resumeToken: null, question: "" };
+        renderAll();
+        syncCompile();
+      });
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(state.workflow, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `${app.workflow.trigger.name || "workflow"}.json`;
+      a.download = `${state.workflow.trigger.name || "workflow"}.json`;
       a.click();
     });
 
-    document.getElementById("importJsonInput").addEventListener("change", async (e) => {
+    document.getElementById("importInput").addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      app.workflow = JSON.parse(await file.text());
-      app.selectedId = app.workflow.blocks[0]?.id || "trigger";
+      state.workflow = JSON.parse(await file.text());
+      state.pageTitle = state.workflow.trigger?.name || "Imported workflow";
+      state.activeDocKey = "imported";
+      state.selectedId = state.workflow.blocks[0]?.id || null;
       renderAll();
       syncCompile();
+    });
+
+    document.getElementById("copyCodeBtn").addEventListener("click", () => {
+      navigator.clipboard?.writeText(state.compiledCode);
+      const btn = document.getElementById("copyCodeBtn");
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = "Copy"; }, 1000);
     });
 
     document.getElementById("runBtn").addEventListener("click", async () => {
       const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflow: app.workflow, input: document.getElementById("simInput").value })
+        body: JSON.stringify({ workflow: state.workflow, input: document.getElementById("simInput").value })
       });
       const data = await res.json();
       const last = data.trace?.[data.trace.length - 1];
-      app.sim = {
+      state.sim = {
         status: data.status,
         activeBlockId: data.status === "paused" && last ? last.block_id : null,
         trace: data.trace || [],
-        state: data.state || {},
+        threadState: data.state || {},
         resumeToken: data.resume_token || null,
         question: data.interrupt_payload?.question || ""
       };
-      app.activeTab = "trace";
+      state.drawerOpen = true;
+      state.drawerTab = "trace";
       renderAll();
     });
 
-    async function handleResume(approved) {
-      if (!app.sim.resumeToken) return;
+    async function resumeHitl(approved) {
+      if (!state.sim.resumeToken) return;
       const res = await fetch("/api/resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume_token: app.sim.resumeToken, approved })
+        body: JSON.stringify({ resume_token: state.sim.resumeToken, approved })
       });
       const data = await res.json();
       const last = data.trace?.[data.trace.length - 1];
-      app.sim = {
+      state.sim = {
         status: data.status,
         activeBlockId: data.status === "paused" && last ? last.block_id : null,
         trace: data.trace || [],
-        state: data.state || {},
+        threadState: data.state || {},
         resumeToken: data.resume_token || null,
         question: data.interrupt_payload?.question || ""
       };
       renderAll();
     }
 
-    document.getElementById("approveBtn").addEventListener("click", () => handleResume(true));
-    document.getElementById("rejectBtn").addEventListener("click", () => handleResume(false));
+    document.getElementById("approveBtn").addEventListener("click", () => resumeHitl(true));
+    document.getElementById("rejectBtn").addEventListener("click", () => resumeHitl(false));
 
-    loadPresets();
+    async function init() {
+      try {
+        const res = await fetch("/api/examples");
+        const data = await res.json();
+        presets = data.examples || {};
+      } catch (_err) {
+        presets = {};
+      }
+      renderAll();
+      syncCompile();
+    }
+
+    init();
   </script>
 </body>
 </html>
