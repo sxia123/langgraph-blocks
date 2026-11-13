@@ -49,7 +49,7 @@ pip install -e ".[runtime]"
 langgraph-blocks studio
 ```
 
-Opens `http://127.0.0.1:8765` with starter templates (`Support Refund + HITL`, `Research & Critique Loop`), live `StateGraph` / `Functional API` compilation, JSON import/export, and step-by-step HITL simulation.
+Opens `http://127.0.0.1:8842` (automatically falling back to another free port if `8842` is busy, avoiding `8000` and `8765`) with starter templates (`Support Refund + HITL`, `Research & Critique Loop`), live `StateGraph` / `Functional API` compilation, JSON import/export, and step-by-step HITL simulation.
 
 ### 2. CLI Workflow
 

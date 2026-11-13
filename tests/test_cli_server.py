@@ -6,7 +6,12 @@ import urllib.request
 from pathlib import Path
 
 from langgraph_blocks import cli
-from langgraph_blocks.server import create_studio_server
+from langgraph_blocks.server import (
+    DEFAULT_STUDIO_PORT,
+    RESERVED_PORTS,
+    create_studio_server,
+    create_studio_server_with_fallback,
+)
 
 
 def test_cli_init_validate_compile_and_run(tmp_path: Path, capsys) -> None:
@@ -79,3 +84,33 @@ def test_studio_http_server_endpoints() -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_studio_server_fallback_skips_busy_and_reserved_ports() -> None:
+    assert DEFAULT_STUDIO_PORT not in RESERVED_PORTS
+    assert 8000 in RESERVED_PORTS
+    assert 8765 in RESERVED_PORTS
+
+    blocker = create_studio_server(host="127.0.0.1", port=0)
+    busy_port = blocker.server_address[1]
+    blocker_thread = threading.Thread(target=blocker.serve_forever, daemon=True)
+    blocker_thread.start()
+
+    try:
+        fallback = create_studio_server_with_fallback(host="127.0.0.1", port=busy_port)
+        try:
+            chosen_port = fallback.server_address[1]
+            assert chosen_port != busy_port
+            assert chosen_port not in RESERVED_PORTS
+        finally:
+            fallback.server_close()
+
+        skip_reserved = create_studio_server_with_fallback(host="127.0.0.1", port=8000)
+        try:
+            assert skip_reserved.server_address[1] not in RESERVED_PORTS
+        finally:
+            skip_reserved.server_close()
+    finally:
+        blocker.shutdown()
+        blocker.server_close()
+        blocker_thread.join(timeout=2)

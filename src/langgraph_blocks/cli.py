@@ -13,7 +13,7 @@ from .compiler_sg import compile_to_state_graph
 from .presets import get_builtin_presets
 from .runtime import WorkflowRunner
 from .schema import ValidationError, collect_state_vars, parse_workflow
-from .server import serve_studio
+from .server import DEFAULT_STUDIO_PORT, serve_studio
 
 
 def _load_json(path: Path) -> dict:
@@ -64,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_studio = sub.add_parser("studio", help="Launch the local web-based Blocks Studio UI.")
     p_studio.add_argument("--host", default="127.0.0.1", help="Bind host.")
-    p_studio.add_argument("--port", type=int, default=8765, help="Bind port.")
+    p_studio.add_argument("--port", type=int, default=DEFAULT_STUDIO_PORT, help="Bind port.")
     p_studio.add_argument("--no-browser", action="store_true", help="Do not auto-open browser.")
 
     return parser

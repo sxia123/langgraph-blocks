@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,9 +18,24 @@ from .runtime import WorkflowRunner
 from .schema import ValidationError, collect_state_vars, parse_workflow
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+DEFAULT_STUDIO_PORT = 8842
+RESERVED_PORTS = frozenset({8000, 8765})
 
 
-def create_studio_server(host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
+class _StudioHTTPServer(ThreadingHTTPServer):
+    # Prevent Windows SO_REUSEADDR port hijacking when another process owns a port.
+    allow_reuse_address = os.name != "nt"
+
+
+def _port_accepts_connections(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=0.1):
+            return True
+    except OSError:
+        return False
+
+
+def create_studio_server(host: str = "127.0.0.1", port: int = DEFAULT_STUDIO_PORT) -> ThreadingHTTPServer:
     """Create a configured ThreadingHTTPServer serving the Blocks Studio UI and API."""
     runner = WorkflowRunner()
 
@@ -134,14 +151,47 @@ def create_studio_server(host: str = "127.0.0.1", port: int = 8765) -> Threading
 
             self._send_json(HTTPStatus.NOT_FOUND, {"error": f"Unknown route: {self.path}"})
 
-    return ThreadingHTTPServer((host, port), StudioHandler)
+    return _StudioHTTPServer((host, port), StudioHandler)
 
 
-def serve_studio(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
+def create_studio_server_with_fallback(
+    host: str = "127.0.0.1",
+    port: int = DEFAULT_STUDIO_PORT,
+) -> ThreadingHTTPServer:
+    """Bind the Studio server, falling back to a free non-reserved port if busy."""
+    candidates: list[int] = []
+    if port != 0:
+        for candidate in (port, DEFAULT_STUDIO_PORT, 8843, 8844, 8845, 8846):
+            if candidate not in RESERVED_PORTS and candidate not in candidates:
+                candidates.append(candidate)
+    for candidate in candidates:
+        if _port_accepts_connections(host, candidate):
+            continue
+        try:
+            return create_studio_server(host=host, port=candidate)
+        except OSError:
+            continue
+    for _ in range(5):
+        server = create_studio_server(host=host, port=0)
+        if server.server_address[1] not in RESERVED_PORTS:
+            return server
+        server.server_close()
+    return create_studio_server(host=host, port=0)
+
+
+def serve_studio(
+    host: str = "127.0.0.1",
+    port: int = DEFAULT_STUDIO_PORT,
+    *,
+    open_browser: bool = True,
+) -> None:
     """Run the local Blocks Studio server until interrupted."""
-    server = create_studio_server(host=host, port=port)
-    url = f"http://{host}:{server.server_address[1]}"
-    print(f"LangGraph Blocks Studio running at {url} (Ctrl+C to stop)")
+    server = create_studio_server_with_fallback(host=host, port=port)
+    actual_port = server.server_address[1]
+    if port != 0 and actual_port != port:
+        print(f"Port {port} is unavailable; switched to port {actual_port}.")
+    url = f"http://{host}:{actual_port}"
+    print(f"LangGraph Blocks Studio running at {url} (Ctrl+C to stop)", flush=True)
     if open_browser:
         webbrowser.open(url)
     try:
