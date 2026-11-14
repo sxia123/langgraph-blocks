@@ -206,3 +206,55 @@ def test_functional_api_calls_custom_endpoint_live() -> None:
         srv.shutdown()
         srv.server_close()
         t.join(timeout=2)
+
+
+def test_functional_per_block_forks_and_respond_continuation() -> None:
+    wf = {
+        "trigger": {"name": "func_forks", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "seed",
+                "type": "set_state",
+                "config": {
+                    "target_var": "tag",
+                    "value_expr": "init",
+                    "fork_mode": "parallel",
+                    "fork_branches": [
+                        {"key": "b1", "label": "B1"},
+                        {"key": "b2", "label": "B2"},
+                    ],
+                },
+                "branches": {
+                    "b1": [{"id": "s1", "type": "set_state", "config": {"target_var": "p1", "value_expr": "A"}}],
+                    "b2": [{"id": "s2", "type": "set_state", "config": {"target_var": "p2", "value_expr": "B"}}],
+                },
+            },
+            {
+                "id": "resp",
+                "type": "respond",
+                "config": {
+                    "template": "Reply:{{p1}}+{{p2}}",
+                    "output_var": "final_response",
+                    "fork_mode": "conditional",
+                    "fork_branches": [
+                        {"key": "urgent", "label": "Urgent", "var": "user_query", "op": "in", "val": "urgent", "is_default": False},
+                        {"key": "normal", "label": "Normal", "is_default": True},
+                    ],
+                },
+                "branches": {
+                    "urgent": [{"id": "fu", "type": "set_state", "config": {"target_var": "followup", "value_expr": "paged"}}],
+                    "normal": [{"id": "fn", "type": "set_state", "config": {"target_var": "followup", "value_expr": "queued"}}],
+                },
+            },
+        ],
+    }
+    code = compile_to_functional_api(wf)
+    app = _load_functional_builder(code)()
+
+    urgent_out = app.invoke({"user_query": "urgent request"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    normal_out = app.invoke({"user_query": "regular question"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    assert urgent_out["final_response"] == "Reply:A+B"
+    assert urgent_out["followup"] == "paged"
+    assert normal_out["final_response"] == "Reply:A+B"
+    assert normal_out["followup"] == "queued"
+

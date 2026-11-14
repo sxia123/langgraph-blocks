@@ -607,11 +607,12 @@
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 6px;
+      flex-wrap: wrap;
+      gap: 4px 6px;
     }
 
     .block-main {
-      flex: 1;
+      flex: 1 1 160px;
       display: flex;
       align-items: center;
       flex-wrap: wrap;
@@ -657,8 +658,9 @@
     .block-actions {
       display: flex;
       align-items: center;
-      gap: 2px;
-      opacity: 0;
+      gap: 3px;
+      margin-left: auto;
+      opacity: 0.72;
       transition: opacity 0.1s ease;
       flex-shrink: 0;
     }
@@ -685,15 +687,211 @@
       color: var(--fg);
     }
 
-    /* Nested Notion Toggle / Indented Branch Containers */
-    .branches-wrap {
-      margin-top: 6px;
-      margin-left: 4px;
-      padding-left: 14px;
-      border-left: 1px solid var(--border-strong);
+    /* Horizontal Tree-Fork Branching Layout */
+    .branches-wrap, .fork-section {
+      margin-top: 8px;
+      padding-top: 2px;
+    }
+
+    .fork-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+      padding: 2px 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .fork-bar-left, .fork-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .fork-mode-seg {
+      display: inline-flex;
+      background: var(--pill-bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 1px;
+    }
+
+    .fork-pill-btn {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s ease, color 0.1s ease;
+    }
+    .fork-pill-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .branch-out-btn, .fork-act-btn {
+      border: 1px solid var(--border);
+      background: var(--pill-bg);
+      color: var(--muted);
+      border-radius: 4px;
+      font-size: 11px;
+      padding: 1px 6px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+    }
+    .branch-out-btn:hover, .fork-act-btn:hover {
+      color: var(--fg);
+      border-color: var(--border-strong);
+      background: var(--card-hover);
+    }
+
+    .fork-stem {
+      width: 1px;
+      height: 10px;
+      background: var(--border-strong);
+      margin: 0 auto;
+    }
+
+    .fork-columns {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      overflow-x: auto;
+      padding-top: 10px;
+      padding-bottom: 2px;
+    }
+
+    .fork-col {
+      position: relative;
+      flex: 1 1 0;
+      min-width: 210px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+    }
+    .fork-col .block-row {
+      padding: 6px 6px 6px 22px;
+      min-width: 0;
+    }
+    .fork-col .block-handle {
+      left: 4px;
+      top: 8px;
+    }
+    .fork-col .block-main {
+      flex: 1 1 120px;
+      min-width: 110px;
+    }
+    .fork-col .icon-btn {
+      width: 20px;
+      height: 20px;
+      font-size: 11px;
+    }
+    .fork-col .branch-out-btn {
+      font-size: 10.5px;
+      height: 20px;
+      padding: 0 5px;
+    }
+    .fork-col::before {
+      content: "";
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      width: 1px;
+      height: 10px;
+      background: var(--border-strong);
+      pointer-events: none;
+    }
+    .fork-col::after {
+      content: "";
+      position: absolute;
+      top: -10px;
+      left: -5px;
+      width: calc(100% + 10px);
+      height: 1px;
+      background: var(--border-strong);
+      pointer-events: none;
+    }
+    .fork-col:first-child::after {
+      left: 50%;
+      width: calc(50% + 5px);
+    }
+    .fork-col:last-child::after {
+      left: -5px;
+      width: calc(50% + 5px);
+    }
+    .fork-col:only-child::after {
+      display: none;
+    }
+
+    .fork-col > .branch-drop-zone {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.018);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 7px;
+      min-height: 52px;
+    }
+    .fork-col > .branch-drop-zone.drop-inside {
+      background: rgba(35, 131, 226, 0.09);
+      border-color: rgba(35, 131, 226, 0.6);
+    }
+
+    .branch-label-input {
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      color: var(--fg);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 1px 4px;
+      min-width: 0;
+      width: 96px;
+      outline: none;
+    }
+    .branch-label-input:hover,
+    .branch-label-input:focus {
+      background: var(--card-hover);
+      border-color: var(--border);
+    }
+
+    .fork-cond-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      padding: 3px 4px 5px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .fork-cond-input, .fork-cond-select {
+      background: var(--pill-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      padding: 1px 4px;
+      outline: none;
+      min-width: 0;
+    }
+    .fork-cond-input:focus, .fork-cond-select:focus {
+      border-color: var(--accent);
+    }
+    .fork-cond-select option {
+      background: var(--popover);
+      color: var(--fg);
     }
 
     .branch-group-label {
@@ -703,6 +901,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 4px;
       padding: 2px 4px;
     }
 
@@ -1332,9 +1531,178 @@
         return "Main flow";
       }
       const def = DEF_MAP[found.blk.type];
-      const match = def?.branches?.find(([k]) => k === branchKey);
-      const branchLabel = match ? match[1] : branchKey;
+      const match = def?.branches?.find(([k]) => k === branchKey)
+        || getParallelLanesList(found.blk).find(([k]) => k === branchKey);
+      const forkMatch = getForkBranchSpecs(found.blk).find(s => s.key === branchKey);
+      const branchLabel = match ? match[1] : (forkMatch ? forkMatch.label : branchKey);
       return `${def?.title || found.blk.type} · ${branchLabel}`;
+    }
+
+    function getForkMode(blk) {
+      return blk.config?.fork_mode === "conditional" ? "conditional" : "parallel";
+    }
+
+    function getDefaultForkVar(blk) {
+      const c = blk.config || {};
+      return String(c.output_var || c.target_var || c.error_var || state.workflow.trigger.input_var || "user_query");
+    }
+
+    function getParallelLanesList(blk) {
+      if (blk.type !== "parallel") return [];
+      const base = [["laneA", "Branch A"], ["laneB", "Branch B"]];
+      const forkKeys = new Set((blk.config?.fork_branches || []).map(b => b.key));
+      const seen = new Set(["laneA", "laneB"]);
+      for (const k of Object.keys(blk.branches || {})) {
+        if (!seen.has(k) && !forkKeys.has(k)) {
+          seen.add(k);
+          const suffix = k.startsWith("lane") ? k.slice(4) : k;
+          base.push([k, `Branch ${suffix}`]);
+        }
+      }
+      return base;
+    }
+
+    function getForkBranchSpecs(blk) {
+      const def = DEF_MAP[blk.type];
+      const reserved = new Set((def?.branches || []).map(([k]) => k));
+      if (blk.type === "parallel") {
+        for (const [k] of getParallelLanesList(blk)) reserved.add(k);
+      }
+      const specs = [];
+      const seen = new Set();
+      const defVar = getDefaultForkVar(blk);
+      if (Array.isArray(blk.config?.fork_branches)) {
+        for (const item of blk.config.fork_branches) {
+          if (!item || !item.key || reserved.has(item.key) || seen.has(item.key)) continue;
+          seen.add(item.key);
+          specs.push({
+            key: String(item.key),
+            label: String(item.label || item.key),
+            var: String(item.var || defVar),
+            op: String(item.op || "=="),
+            val: String(item.val ?? ""),
+            is_default: Boolean(item.is_default)
+          });
+        }
+      }
+      for (const k of Object.keys(blk.branches || {})) {
+        if (reserved.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        specs.push({ key: k, label: k, var: defVar, op: "==", val: k, is_default: false });
+      }
+      return specs;
+    }
+
+    function ensureForkArray(blk) {
+      if (!blk.branches) blk.branches = {};
+      if (!blk.config) blk.config = {};
+      blk.config.fork_branches = getForkBranchSpecs(blk);
+      for (const spec of blk.config.fork_branches) {
+        if (!Array.isArray(blk.branches[spec.key])) blk.branches[spec.key] = [];
+      }
+      return blk.config.fork_branches;
+    }
+
+    function branchOutBlock(blkId) {
+      const found = findNode(blkId);
+      if (!found) return;
+      const blk = found.blk;
+      if (blk.type === "parallel") {
+        if (!blk.branches) blk.branches = { laneA: [], laneB: [] };
+        let idx = Object.keys(blk.branches).length;
+        let laneKey = `lane${String.fromCharCode(65 + idx)}`;
+        while (Object.prototype.hasOwnProperty.call(blk.branches, laneKey)) {
+          idx += 1;
+          laneKey = `lane${idx + 1}`;
+        }
+        blk.branches[laneKey] = [];
+        state.selectedId = blk.id;
+        renderAll();
+        syncCompile();
+        return;
+      }
+
+      const list = ensureForkArray(blk);
+      const defVar = getDefaultForkVar(blk);
+      if (!blk.config.fork_mode) blk.config.fork_mode = "parallel";
+
+      if (list.length === 0) {
+        list.push(
+          { key: "branch_1", label: "Branch A", var: defVar, op: "==", val: "option_a", is_default: false },
+          { key: "branch_2", label: "Branch B", var: defVar, op: "==", val: "", is_default: true }
+        );
+        blk.branches.branch_1 = [];
+        blk.branches.branch_2 = [];
+      } else {
+        let n = list.length + 1;
+        while (Object.prototype.hasOwnProperty.call(blk.branches, `branch_${n}`)) n += 1;
+        const key = `branch_${n}`;
+        const letter = n <= 26 ? String.fromCharCode(64 + n) : String(n);
+        const newSpec = { key, label: `Branch ${letter}`, var: defVar, op: "==", val: `option_${n}`, is_default: false };
+        const defIdx = list.findIndex(s => s.is_default);
+        if (defIdx >= 0) list.splice(defIdx, 0, newSpec);
+        else list.push(newSpec);
+        blk.branches[key] = [];
+      }
+      state.selectedId = blk.id;
+      renderAll();
+      syncCompile();
+    }
+
+    function removeForkBranch(blkId, branchKey) {
+      const found = findNode(blkId);
+      if (!found) return;
+      const blk = found.blk;
+      if (blk.type === "parallel" && branchKey.startsWith("lane") && !["laneA", "laneB"].includes(branchKey)) {
+        delete blk.branches[branchKey];
+        if (state.slashTarget.parentId === blkId && state.slashTarget.branchKey === branchKey) {
+          state.slashTarget = { parentId: null, branchKey: null };
+        }
+        renderAll();
+        syncCompile();
+        return;
+      }
+      const list = ensureForkArray(blk).filter(s => s.key !== branchKey);
+      delete blk.branches[branchKey];
+      if (state.slashTarget.parentId === blkId && state.slashTarget.branchKey === branchKey) {
+        state.slashTarget = { parentId: null, branchKey: null };
+      }
+      if (list.length === 0) {
+        delete blk.config.fork_branches;
+        delete blk.config.fork_mode;
+        if (Object.keys(blk.branches).length === 0) delete blk.branches;
+      } else {
+        blk.config.fork_branches = list;
+      }
+      renderAll();
+      syncCompile();
+    }
+
+    function clearBlockFork(blkId) {
+      const found = findNode(blkId);
+      if (!found) return;
+      const blk = found.blk;
+      for (const spec of getForkBranchSpecs(blk)) {
+        delete blk.branches?.[spec.key];
+        if (state.slashTarget.parentId === blkId && state.slashTarget.branchKey === spec.key) {
+          state.slashTarget = { parentId: null, branchKey: null };
+        }
+      }
+      delete blk.config.fork_branches;
+      delete blk.config.fork_mode;
+      if (blk.branches && Object.keys(blk.branches).length === 0) delete blk.branches;
+      renderAll();
+      syncCompile();
+    }
+
+    function setForkMode(blkId, nextMode) {
+      const found = findNode(blkId);
+      if (!found) return;
+      const blk = found.blk;
+      ensureForkArray(blk);
+      blk.config.fork_mode = nextMode === "conditional" ? "conditional" : "parallel";
+      renderAll();
+      syncCompile();
     }
 
     async function syncCompile() {
@@ -1508,6 +1876,54 @@
       return "";
     }
 
+    function renderBranchColumn(blk, bKey, bLabel, opts = {}) {
+      const children = blk.branches?.[bKey] || [];
+      const isTarget = state.slashTarget.parentId === blk.id && state.slashTarget.branchKey === bKey;
+      const isFork = Boolean(opts.isFork);
+      const forkSpec = opts.spec;
+      const isConditional = Boolean(opts.isConditional);
+      const canRemove = Boolean(opts.canRemove);
+      const titleHtml = isFork
+        ? `<input class="branch-label-input fork-lbl-inp" data-blk-id="${esc(blk.id)}" data-branch-key="${esc(bKey)}" value="${esc(bLabel)}" title="Rename branch" />`
+        : `<span>${esc(bLabel)}</span>`;
+
+      let condHtml = "";
+      if (isFork && isConditional && forkSpec) {
+        const ops = ["==", "!=", "in", ">=", ">", "<=", "<"];
+        condHtml = `<div class="fork-cond-row">
+          <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;color:var(--muted);">
+            <input type="checkbox" class="fork-def-chk" data-blk-id="${esc(blk.id)}" data-branch-key="${esc(bKey)}" ${forkSpec.is_default ? "checked" : ""} />
+            <span>else</span>
+          </label>
+          ${forkSpec.is_default
+            ? `<span class="var-chip" style="color:var(--muted);">default fallback</span>`
+            : `<input class="fork-cond-input fork-cond-var" style="width:74px;" data-blk-id="${esc(blk.id)}" data-branch-key="${esc(bKey)}" value="${esc(forkSpec.var)}" title="State variable" />
+               <select class="fork-cond-select fork-cond-op" data-blk-id="${esc(blk.id)}" data-branch-key="${esc(bKey)}">
+                 ${ops.map(o => `<option value="${esc(o)}" ${forkSpec.op === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+               </select>
+               <input class="fork-cond-input fork-cond-val" style="flex:1;min-width:48px;" data-blk-id="${esc(blk.id)}" data-branch-key="${esc(bKey)}" value="${esc(forkSpec.val)}" placeholder="value" />`
+          }
+        </div>`;
+      }
+
+      return `<div class="fork-col">
+        <div class="branch-drop-zone" data-drop-parent="${esc(blk.id)}" data-drop-branch="${esc(bKey)}">
+          <div class="branch-group-label">
+            ${titleHtml}
+            <div style="display:flex;align-items:center;gap:3px;">
+              <button type="button" class="branch-target-btn ${isTarget ? "active" : ""}" data-p="${blk.id}" data-b="${bKey}" title="Target sidebar inserts here">${isTarget ? "Targeting" : "Target"}</button>
+              ${canRemove ? `<button type="button" class="icon-btn fork-rm-branch" data-blk-id="${esc(blk.id)}" data-branch-key="${esc(bKey)}" title="Remove branch" style="width:18px;height:18px;">&times;</button>` : ""}
+            </div>
+          </div>
+          ${condHtml}
+          <div class="block-stack">${renderTree(children, blk.id, bKey)}</div>
+          <button type="button" class="slash-prompt slash-prompt-inline open-slash" data-p="${blk.id}" data-b="${bKey}">
+            <span>+</span><span>Add or drop into ${esc(bLabel.toLowerCase())}</span>
+          </button>
+        </div>
+      </div>`;
+    }
+
     function renderTree(blocks, parentId = "", branchKey = "") {
       return blocks.map((blk, idx) => {
         const def = DEF_MAP[blk.type] || { title: blk.type, cat: "tools", container: false };
@@ -1517,25 +1933,59 @@
 
         let branchesHtml = "";
         if (def.container) {
-          branchesHtml = `<div class="branches-wrap">` + def.branches.map(([bKey, bLabel]) => {
-            const children = blk.branches?.[bKey] || [];
+          const branchEntries = blk.type === "parallel" ? getParallelLanesList(blk) : def.branches;
+          const colsHtml = branchEntries.map(([bKey, bLabel]) => {
             let displayLabel = bLabel;
             if (blk.type === "llm_router") {
               if (bKey === "route_a") displayLabel = `Route A (${blk.config.label_a || "a"})`;
               if (bKey === "route_b") displayLabel = `Route B (${blk.config.label_b || "b"})`;
             }
-            const isTarget = state.slashTarget.parentId === blk.id && state.slashTarget.branchKey === bKey;
-            return `<div class="branch-drop-zone" data-drop-parent="${esc(blk.id)}" data-drop-branch="${esc(bKey)}">
-              <div class="branch-group-label">
-                <span>${esc(displayLabel)}</span>
-                <button type="button" class="branch-target-btn ${isTarget ? "active" : ""}" data-p="${blk.id}" data-b="${bKey}" title="Target sidebar inserts here">${isTarget ? "Targeting" : "Target"}</button>
+            const canRm = blk.type === "parallel" && !["laneA", "laneB"].includes(bKey);
+            return renderBranchColumn(blk, bKey, displayLabel, { canRemove: canRm });
+          }).join("");
+
+          const parallelToolbar = blk.type === "parallel"
+            ? `<div class="fork-bar">
+                <div class="fork-bar-left"><span>⑂ Parallel lanes (${branchEntries.length})</span></div>
+                <div class="fork-bar-right"><button type="button" class="fork-act-btn add-fork-branch" data-blk-id="${esc(blk.id)}">+ Add branch</button></div>
+              </div>`
+            : "";
+
+          branchesHtml += `<div class="branches-wrap">
+            ${parallelToolbar}
+            <div class="fork-stem"></div>
+            <div class="fork-columns">${colsHtml}</div>
+          </div>`;
+        }
+
+        const forkSpecs = getForkBranchSpecs(blk);
+        if (forkSpecs.length > 0) {
+          const fMode = getForkMode(blk);
+          const colsHtml = forkSpecs.map(spec =>
+            renderBranchColumn(blk, spec.key, spec.label, {
+              isFork: true,
+              spec,
+              isConditional: fMode === "conditional",
+              canRemove: true
+            })
+          ).join("");
+          branchesHtml += `<div class="fork-section">
+            <div class="fork-bar">
+              <div class="fork-bar-left">
+                <span>${def.container ? "↳ After join → Branch out" : "⑂ Branch out"}</span>
+                <div class="fork-mode-seg">
+                  <button type="button" class="fork-pill-btn set-fork-mode ${fMode === "parallel" ? "active" : ""}" data-blk-id="${esc(blk.id)}" data-mode="parallel">Parallel</button>
+                  <button type="button" class="fork-pill-btn set-fork-mode ${fMode === "conditional" ? "active" : ""}" data-blk-id="${esc(blk.id)}" data-mode="conditional">Conditional</button>
+                </div>
               </div>
-              <div class="block-stack">${renderTree(children, blk.id, bKey)}</div>
-              <button type="button" class="slash-prompt slash-prompt-inline open-slash" data-p="${blk.id}" data-b="${bKey}">
-                <span>+</span><span>Add or drop block into ${esc(displayLabel.toLowerCase())}</span>
-              </button>
-            </div>`;
-          }).join("") + `</div>`;
+              <div class="fork-bar-right">
+                <button type="button" class="fork-act-btn add-fork-branch" data-blk-id="${esc(blk.id)}">+ Add branch</button>
+                <button type="button" class="fork-act-btn clear-fork-btn" data-blk-id="${esc(blk.id)}" title="Remove fork branches">Clear</button>
+              </div>
+            </div>
+            <div class="fork-stem"></div>
+            <div class="fork-columns">${colsHtml}</div>
+          </div>`;
         }
 
         return `<div class="block-row ${cls}" draggable="true" data-blk="${blk.id}" data-parent-id="${esc(parentId)}" data-branch-key="${esc(branchKey)}" data-index="${idx}">
@@ -1546,6 +1996,7 @@
               <span class="block-summary">${summarize(blk)}</span>
             </div>
             <div class="block-actions" onclick="event.stopPropagation()">
+              <button type="button" class="branch-out-btn branch-out-trigger" data-id="${blk.id}" title="${blk.type === "parallel" ? "Add parallel branch" : "Branch out from this block"}">+ Branch out</button>
               <button type="button" class="icon-btn mv-up" data-id="${blk.id}" title="Move up">&uarr;</button>
               <button type="button" class="icon-btn mv-dn" data-id="${blk.id}" title="Move down">&darr;</button>
               <button type="button" class="icon-btn rm-blk" data-id="${blk.id}" title="Delete">&times;</button>
@@ -1569,19 +2020,23 @@
       const treeEl = document.getElementById("blockTree");
       treeEl.innerHTML = renderTree(state.workflow.blocks);
 
-      treeEl.querySelectorAll(".inline-mode-sel").forEach(sel => {
-        const row = sel.closest(".block-row");
-        sel.addEventListener("mousedown", (e) => {
+      const suppressRowDrag = (el) => {
+        const row = el.closest(".block-row");
+        el.addEventListener("mousedown", (e) => {
           e.stopPropagation();
           if (row) row.setAttribute("draggable", "false");
         });
-        sel.addEventListener("mouseup", () => {
+        el.addEventListener("mouseup", () => {
           if (row) row.setAttribute("draggable", "true");
         });
-        sel.addEventListener("blur", () => {
+        el.addEventListener("blur", () => {
           if (row) row.setAttribute("draggable", "true");
         });
-        sel.addEventListener("click", (e) => e.stopPropagation());
+        el.addEventListener("click", (e) => e.stopPropagation());
+      };
+
+      treeEl.querySelectorAll(".inline-mode-sel").forEach(sel => {
+        suppressRowDrag(sel);
         sel.addEventListener("change", (e) => {
           e.stopPropagation();
           const found = findNode(sel.getAttribute("data-blk-id"));
@@ -1603,6 +2058,68 @@
           syncCompile();
         });
       });
+
+      treeEl.querySelectorAll(".branch-out-trigger, .add-fork-branch").forEach(btn => {
+        suppressRowDrag(btn);
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          branchOutBlock(btn.getAttribute("data-id") || btn.getAttribute("data-blk-id"));
+        });
+      });
+
+      treeEl.querySelectorAll(".set-fork-mode").forEach(btn => {
+        suppressRowDrag(btn);
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          setForkMode(btn.getAttribute("data-blk-id"), btn.getAttribute("data-mode"));
+        });
+      });
+
+      treeEl.querySelectorAll(".clear-fork-btn").forEach(btn => {
+        suppressRowDrag(btn);
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          clearBlockFork(btn.getAttribute("data-blk-id"));
+        });
+      });
+
+      treeEl.querySelectorAll(".fork-rm-branch").forEach(btn => {
+        suppressRowDrag(btn);
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          removeForkBranch(btn.getAttribute("data-blk-id"), btn.getAttribute("data-branch-key"));
+        });
+      });
+
+      const bindForkField = (selector, propName, eventName = "input", readVal = el => el.value) => {
+        treeEl.querySelectorAll(selector).forEach(el => {
+          suppressRowDrag(el);
+          el.addEventListener(eventName, (e) => {
+            e.stopPropagation();
+            const found = findNode(el.getAttribute("data-blk-id"));
+            if (!found) return;
+            const list = ensureForkArray(found.blk);
+            const bKey = el.getAttribute("data-branch-key");
+            const spec = list.find(s => s.key === bKey);
+            if (!spec) return;
+            spec[propName] = readVal(el);
+            found.blk.config.fork_branches = list;
+            if (propName === "is_default") {
+              renderCanvas();
+            } else if (propName === "label") {
+              const promptEl = el.closest(".branch-drop-zone")?.querySelector(".open-slash span:last-child");
+              if (promptEl) promptEl.textContent = `Add or drop into ${String(spec.label || bKey).toLowerCase()}`;
+            }
+            if (state.selectedId === found.blk.id && propName === "is_default") renderInspector();
+            syncCompile();
+          });
+        });
+      };
+      bindForkField(".fork-lbl-inp", "label");
+      bindForkField(".fork-cond-var", "var");
+      bindForkField(".fork-cond-op", "op", "change");
+      bindForkField(".fork-cond-val", "val");
+      bindForkField(".fork-def-chk", "is_default", "change", el => el.checked);
 
       treeEl.querySelectorAll("[data-blk]").forEach(el => {
         el.addEventListener("click", (e) => {
@@ -1683,7 +2200,7 @@
         if (!Object.prototype.hasOwnProperty.call(cfg, "model")) cfg.model = norm.model;
       }
 
-      const keys = Object.keys(cfg);
+      const keys = Object.keys(cfg).filter(k => k !== "fork_mode" && k !== "fork_branches");
       if (isAiBlock) {
         for (const extra of ["llm_mode", "api_provider", "endpoint_url", "api_key_env", "model", "temperature", "max_tokens", "system_prompt"]) {
           if (!keys.includes(extra)) keys.push(extra);
@@ -1800,13 +2317,58 @@
         fieldsHtml = orderedKeys.map(renderField).join("");
       }
 
+      const inspForkSpecs = getForkBranchSpecs(blk);
+      const inspForkMode = getForkMode(blk);
+      const inspForkHtml = `
+        <div class="insp-section-title">Outgoing Branching</div>
+        ${blk.type === "parallel" ? `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span style="font-size:12px;color:var(--muted);">Active parallel lanes: ${getParallelLanesList(blk).length}</span>
+            <button type="button" id="inspAddBranchBtn" class="fork-act-btn">+ Add lane</button>
+          </div>
+        ` : inspForkSpecs.length === 0 ? `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span style="font-size:12px;color:var(--muted);">Runs linearly to the next block</span>
+            <button type="button" id="inspAddBranchBtn" class="fork-act-btn">+ Branch out</button>
+          </div>
+        ` : `
+          <div class="field">
+            <label>Fork Mode</label>
+            <select id="inspForkModeSel" class="n-select">
+              <option value="parallel" ${inspForkMode === "parallel" ? "selected" : ""}>Parallel fan-out (run all branches)</option>
+              <option value="conditional" ${inspForkMode === "conditional" ? "selected" : ""}>Conditional routing (evaluate conditions)</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
+            ${inspForkSpecs.map(s => `
+              <div style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:rgba(255,255,255,0.02);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                  <strong style="font-size:12px;">${esc(s.label)}</strong>
+                  <span style="font-size:11px;color:var(--muted);">${inspForkMode === "conditional" ? (s.is_default ? "else default" : `${esc(s.var)} ${esc(s.op)} ${esc(s.val)}`) : "parallel branch"}</span>
+                </div>
+              </div>`).join("")}
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" id="inspAddBranchBtn" class="fork-act-btn">+ Add branch</button>
+            <button type="button" id="inspClearForkBtn" class="fork-act-btn">Clear fork</button>
+          </div>
+        `}
+      `;
+
       body.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <span class="tag tag-${def.cat}">${esc(def.title)}</span>
           <span style="font-size:12px;color:var(--muted);font-family:ui-monospace,monospace;">${esc(blk.id)}</span>
         </div>
         ${fieldsHtml}
+        ${inspForkHtml}
       `;
+
+      document.getElementById("inspAddBranchBtn")?.addEventListener("click", () => branchOutBlock(blk.id));
+      document.getElementById("inspClearForkBtn")?.addEventListener("click", () => clearBlockFork(blk.id));
+      document.getElementById("inspForkModeSel")?.addEventListener("change", (e) => {
+        setForkMode(blk.id, e.target.value);
+      });
 
       const modeSel = document.getElementById("inspLlmMode");
       if (modeSel) {
@@ -2136,7 +2698,7 @@
     const canvasScrollEl = document.getElementById("canvasScroll");
 
     blockTreeEl.addEventListener("dragstart", (e) => {
-      if (e.target.closest("select, input, textarea, button.icon-btn, button.branch-target-btn, button.slash-prompt")) {
+      if (e.target.closest("select, input, textarea, button.icon-btn, button.branch-target-btn, button.slash-prompt, button.branch-out-btn, button.fork-pill-btn, button.fork-act-btn, .fork-cond-row")) {
         e.preventDefault();
         return;
       }

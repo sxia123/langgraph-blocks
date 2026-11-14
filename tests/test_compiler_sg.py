@@ -290,3 +290,87 @@ def test_generated_stategraph_calls_custom_endpoint_live() -> None:
         srv.shutdown()
         srv.server_close()
         t.join(timeout=2)
+
+
+def test_stategraph_per_block_forks_and_three_lane_parallel() -> None:
+    # 1) Parallel fork out of an ask_llm step + 3-lane parallel container
+    par_wf = {
+        "trigger": {"name": "sg_forks", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "ask1",
+                "type": "ask_llm",
+                "config": {
+                    "prompt": "Classify {{user_query}}",
+                    "output_var": "seed",
+                    "fork_mode": "parallel",
+                    "fork_branches": [
+                        {"key": "b1", "label": "Left"},
+                        {"key": "b2", "label": "Right"},
+                    ],
+                },
+                "branches": {
+                    "b1": [{"id": "s1", "type": "set_state", "config": {"target_var": "left", "value_expr": "L:{{seed}}"}}],
+                    "b2": [{"id": "s2", "type": "set_state", "config": {"target_var": "right", "value_expr": "R:{{seed}}"}}],
+                },
+            },
+            {
+                "id": "p3",
+                "type": "parallel",
+                "config": {"label": "Three Lanes"},
+                "branches": {
+                    "laneA": [{"id": "la", "type": "set_state", "config": {"target_var": "va", "value_expr": "1"}}],
+                    "laneB": [{"id": "lb", "type": "set_state", "config": {"target_var": "vb", "value_expr": "2"}}],
+                    "laneC": [{"id": "lc", "type": "set_state", "config": {"target_var": "vc", "value_expr": "3"}}],
+                },
+            },
+            {
+                "id": "merge",
+                "type": "set_state",
+                "config": {"target_var": "summary", "value_expr": "{{left}}|{{right}}|{{va}}-{{vb}}-{{vc}}"},
+            },
+        ],
+    }
+    code = compile_to_state_graph(par_wf)
+    build_wf = _load_compiled_graph(code)
+    graph = build_wf(llm=lambda _p, _s: "OK")
+    out = graph.invoke({"user_query": "hi"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    assert out["summary"] == "L:OK|R:OK|1-2-3"
+
+    # 2) Conditional fork out of ask_llm converging cleanly to downstream block
+    cond_wf = {
+        "trigger": {"name": "sg_cond_fork", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "ask1",
+                "type": "ask_llm",
+                "config": {
+                    "prompt": "{{user_query}}",
+                    "output_var": "tier",
+                    "fork_mode": "conditional",
+                    "fork_branches": [
+                        {"key": "vip", "label": "VIP", "var": "tier", "op": "==", "val": "vip", "is_default": False},
+                        {"key": "std", "label": "Standard", "is_default": True},
+                    ],
+                },
+                "branches": {
+                    "vip": [{"id": "sv", "type": "set_state", "config": {"target_var": "note", "value_expr": "PRIORITY"}}],
+                    "std": [{"id": "ss", "type": "set_state", "config": {"target_var": "note", "value_expr": "REGULAR"}}],
+                },
+            },
+            {
+                "id": "after",
+                "type": "set_state",
+                "config": {"target_var": "done", "value_expr": "done:{{note}}"},
+            },
+        ],
+    }
+    cond_code = compile_to_state_graph(cond_wf)
+    cond_graph = _load_compiled_graph(cond_code)(
+        llm=lambda _p, s: "vip" if "vip" in s.get("user_query", "") else "basic"
+    )
+    out_vip = cond_graph.invoke({"user_query": "vip help"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    out_std = cond_graph.invoke({"user_query": "basic help"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    assert out_vip["done"] == "done:PRIORITY"
+    assert out_std["done"] == "done:REGULAR"
+

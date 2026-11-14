@@ -5,7 +5,16 @@ from __future__ import annotations
 from importlib import resources
 from typing import Any
 
-from .schema import BlockNode, WorkflowSchema, collect_state_vars, parse_workflow, sanitize_identifier
+from .schema import (
+    BlockNode,
+    WorkflowSchema,
+    collect_state_vars,
+    get_fork_mode,
+    get_node_fork_branches,
+    get_parallel_lanes,
+    parse_workflow,
+    sanitize_identifier,
+)
 
 
 def _load_http_helpers() -> str:
@@ -196,6 +205,65 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
             return first_entry, prev_exit
 
         def lower_blk(blk: BlockNode) -> tuple[str, str]:
+            entry, exit_node = lower_base_blk(blk)
+            return attach_fork(blk, entry, exit_node)
+
+        def attach_fork(blk: BlockNode, entry: str, exit_node: str) -> tuple[str, str]:
+            fork_specs = get_node_fork_branches(blk)
+            if not fork_specs:
+                return entry, exit_node
+            mode = get_fork_mode(blk)
+            join = reg_node("fork_join", ["        return {}"])
+            lowered = [(spec, lower_seq(blk.branches.get(spec["key"], []))) for spec in fork_specs]
+
+            if mode == "conditional":
+                route_fn = next_node_id("fork_route")
+                fn_lines = [f"    def {route_fn}(state: AgentState) -> str:"]
+                mapping_parts: list[str] = []
+                default_key: str | None = None
+                for spec, b_res in lowered:
+                    b_key = spec["key"]
+                    mapping_parts.append(f'{b_key!r}: "{b_res[0] if b_res else join}"')
+                    if spec["is_default"] and default_key is None:
+                        default_key = b_key
+                    elif not spec["is_default"]:
+                        c_var = sanitize_identifier(spec["var"])
+                        fn_lines.append(
+                            f"        if _eval_cond(state.get({c_var!r}), {spec['op']!r}, {spec['val']!r}):"
+                        )
+                        fn_lines.append(f"            return {b_key!r}")
+                if default_key is None:
+                    mapping_parts.append(f"'__join__': \"{join}\"")
+                    fn_lines.append("        return '__join__'")
+                else:
+                    fn_lines.append(f"        return {default_key!r}")
+                node_defs.append("\n".join(fn_lines))
+                region_edges.append(
+                    f"    {builder_var}.add_conditional_edges(\n"
+                    f'        "{exit_node}",\n'
+                    f"        {route_fn},\n"
+                    f"        {{{', '.join(mapping_parts)}}},\n"
+                    "    )"
+                )
+                for _spec, b_res in lowered:
+                    if b_res:
+                        region_edges.append(f'    {builder_var}.add_edge("{b_res[1]}", "{join}")')
+                return entry, join
+
+            active = [b_res for _spec, b_res in lowered if b_res is not None]
+            if not active:
+                region_edges.append(f'    {builder_var}.add_edge("{exit_node}", "{join}")')
+            elif len(active) == 1:
+                region_edges.append(f'    {builder_var}.add_edge("{exit_node}", "{active[0][0]}")')
+                region_edges.append(f'    {builder_var}.add_edge("{active[0][1]}", "{join}")')
+            else:
+                for b_entry, _ in active:
+                    region_edges.append(f'    {builder_var}.add_edge("{exit_node}", "{b_entry}")')
+                exits_literal = ", ".join(f'"{ex}"' for _, ex in active)
+                region_edges.append(f'    {builder_var}.add_edge([{exits_literal}], "{join}")')
+            return entry, join
+
+        def lower_base_blk(blk: BlockNode) -> tuple[str, str]:
             cfg = blk.config
 
             if blk.type == "ask_llm":
@@ -562,9 +630,8 @@ def compile_to_state_graph(workflow: WorkflowSchema | dict[str, Any]) -> str:
             if blk.type == "parallel":
                 split = reg_node("fan_out", ["        return {}"])
                 join = reg_node("fan_in", ["        return {}"])
-                lane_a = lower_seq(blk.branches.get("laneA", []))
-                lane_b = lower_seq(blk.branches.get("laneB", []))
-                active = [lane for lane in (lane_a, lane_b) if lane is not None]
+                lanes = [lower_seq(blk.branches.get(k, [])) for k in get_parallel_lanes(blk)]
+                active = [lane for lane in lanes if lane is not None]
                 if not active:
                     region_edges.append(f'    {builder_var}.add_edge("{split}", "{join}")')
                 elif len(active) == 1:

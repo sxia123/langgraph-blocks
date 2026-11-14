@@ -10,7 +10,16 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Callable, TypedDict
 
 from ._llm_http import _http_llm_call
-from .schema import BlockNode, WorkflowSchema, collect_state_vars, parse_workflow, sanitize_identifier
+from .schema import (
+    BlockNode,
+    WorkflowSchema,
+    collect_state_vars,
+    get_fork_mode,
+    get_node_fork_branches,
+    get_parallel_lanes,
+    parse_workflow,
+    sanitize_identifier,
+)
 
 
 def render_template(template: str, state: dict[str, Any]) -> str:
@@ -299,6 +308,56 @@ def build_state_graph(
             return first_entry, prev_exit
 
         def lower_block(blk: BlockNode) -> tuple[str, str]:
+            entry, exit_node = lower_base_block(blk)
+            return attach_fork(blk, entry, exit_node)
+
+        def attach_fork(blk: BlockNode, entry: str, exit_node: str) -> tuple[str, str]:
+            fork_specs = get_node_fork_branches(blk)
+            if not fork_specs:
+                return entry, exit_node
+            mode = get_fork_mode(blk)
+            join = next_node("fork_join", lambda s: {})
+            lowered = [(spec, lower_sequence(blk.branches.get(spec["key"], []))) for spec in fork_specs]
+
+            if mode == "conditional":
+                rules = [
+                    (sanitize_identifier(spec["var"]), spec["op"], spec["val"], spec["key"])
+                    for spec in fork_specs
+                    if not spec["is_default"]
+                ]
+                default_key = next((s["key"] for s in fork_specs if s["is_default"]), "__join__")
+                mapping = {
+                    spec["key"]: (b_res[0] if b_res else join)
+                    for spec, b_res in lowered
+                }
+                if default_key == "__join__":
+                    mapping["__join__"] = join
+
+                def route_fn(s: dict[str, Any], _rules=rules, _def=default_key) -> str:
+                    for c_var, op, val, b_key in _rules:
+                        if eval_condition(s.get(c_var), op, val):
+                            return b_key
+                    return _def
+
+                target_builder.add_conditional_edges(exit_node, route_fn, mapping)
+                for _spec, b_res in lowered:
+                    if b_res:
+                        target_builder.add_edge(b_res[1], join)
+                return entry, join
+
+            active = [b_res for _spec, b_res in lowered if b_res is not None]
+            if not active:
+                target_builder.add_edge(exit_node, join)
+            elif len(active) == 1:
+                target_builder.add_edge(exit_node, active[0][0])
+                target_builder.add_edge(active[0][1], join)
+            else:
+                for b_entry, _ in active:
+                    target_builder.add_edge(exit_node, b_entry)
+                target_builder.add_edge([ex for _, ex in active], join)
+            return entry, join
+
+        def lower_base_block(blk: BlockNode) -> tuple[str, str]:
             cfg = blk.config
 
             if blk.type == "ask_llm":
@@ -589,9 +648,8 @@ def build_state_graph(
             if blk.type == "parallel":
                 split = next_node("fan_out", lambda s: {})
                 join = next_node("fan_in", lambda s: {})
-                lane_a = lower_sequence(blk.branches.get("laneA", []))
-                lane_b = lower_sequence(blk.branches.get("laneB", []))
-                active = [lane for lane in (lane_a, lane_b) if lane is not None]
+                lanes = [lower_sequence(blk.branches.get(k, [])) for k in get_parallel_lanes(blk)]
+                active = [lane for lane in lanes if lane is not None]
                 if not active:
                     target_builder.add_edge(split, join)
                 elif len(active) == 1:
@@ -691,11 +749,16 @@ class RunResult:
 
 
 @dataclass
+class _ForkStep:
+    blk: BlockNode
+
+
+@dataclass
 class _PausedExecution:
     workflow: WorkflowSchema
     state: dict[str, Any]
     trace: list[TraceEvent]
-    frames: list[tuple[list[BlockNode], int]]
+    frames: list[tuple[list[Any], int]]
     approval_block: BlockNode
     llm: Any | None
     tools: dict[str, Callable[..., Any]]
@@ -758,6 +821,8 @@ class WorkflowRunner:
                 detail=f"Reviewer chose {'Approve' if approved else 'Reject'} ({out_var}={approved})",
             )
         )
+        if get_node_fork_branches(blk):
+            paused.frames.append(([_ForkStep(blk)], 0))
         branch = blk.branches.get("approved" if approved else "rejected", [])
         if branch:
             paused.frames.append((list(branch), 0))
@@ -772,12 +837,54 @@ class WorkflowRunner:
             api_key=paused.api_key,
         )
 
+    def _run_parallel_branches(
+        self,
+        wf: WorkflowSchema,
+        state: dict[str, Any],
+        trace: list[TraceEvent],
+        branch_lists: list[list[BlockNode]],
+        *,
+        llm: Any | None,
+        tools: dict[str, Callable[..., Any]],
+        react_runner: Callable[..., Any] | None,
+        api_key: str,
+    ) -> None:
+        active = [nodes for nodes in branch_lists if nodes]
+        if not active:
+            return
+
+        def run_lane(lane_nodes: list[BlockNode]) -> tuple[dict[str, Any], list[TraceEvent]]:
+            sub_wf = WorkflowSchema(trigger=wf.trigger, blocks=lane_nodes)
+            sub_state = dict(state)
+            sub_trace: list[TraceEvent] = []
+            self._drive(
+                sub_wf,
+                sub_state,
+                sub_trace,
+                [(list(lane_nodes), 0)],
+                llm=llm,
+                tools=tools,
+                react_runner=react_runner,
+                api_key=api_key,
+                emit_end=False,
+            )
+            return sub_state, sub_trace
+
+        with ThreadPoolExecutor(max_workers=min(4, len(active))) as pool:
+            futs = [pool.submit(run_lane, lane_nodes) for lane_nodes in active]
+            for fut in futs:
+                st_b, tr_b = fut.result()
+                for k, v in st_b.items():
+                    if k not in state or state[k] != v:
+                        state[k] = v
+                trace.extend(tr_b)
+
     def _drive(
         self,
         wf: WorkflowSchema,
         state: dict[str, Any],
         trace: list[TraceEvent],
-        frames: list[tuple[list[BlockNode], int]],
+        frames: list[tuple[list[Any], int]],
         *,
         llm: Any | None,
         tools: dict[str, Callable[..., Any]],
@@ -791,9 +898,55 @@ class WorkflowRunner:
                 frames.pop()
                 continue
 
-            blk = seq[idx]
+            item = seq[idx]
             frames[-1] = (seq, idx + 1)
+
+            if isinstance(item, _ForkStep):
+                src = item.blk
+                fork_specs = get_node_fork_branches(src)
+                if not fork_specs:
+                    continue
+                if get_fork_mode(src) == "parallel":
+                    labels = ", ".join(s["label"] for s in fork_specs)
+                    trace.append(TraceEvent(src.id, src.type, "Parallel Branch Out", f"Running {labels}"))
+                    self._run_parallel_branches(
+                        wf,
+                        state,
+                        trace,
+                        [src.branches.get(s["key"], []) for s in fork_specs],
+                        llm=llm,
+                        tools=tools,
+                        react_runner=react_runner,
+                        api_key=api_key,
+                    )
+                    trace.append(TraceEvent(src.id, src.type, "Parallel Join", "Merged outgoing branches"))
+                else:
+                    chosen = None
+                    default_spec = None
+                    for spec in fork_specs:
+                        if spec["is_default"]:
+                            if default_spec is None:
+                                default_spec = spec
+                            continue
+                        c_var = sanitize_identifier(spec["var"])
+                        if eval_condition(state.get(c_var), spec["op"], spec["val"]):
+                            chosen = spec
+                            break
+                    chosen = chosen or default_spec
+                    if chosen is None:
+                        trace.append(TraceEvent(src.id, src.type, "Conditional Fork", "No condition matched -> join"))
+                    else:
+                        trace.append(
+                            TraceEvent(src.id, src.type, "Conditional Fork", f"Matched '{chosen['label']}' ({chosen['key']})")
+                        )
+                        branch = src.branches.get(chosen["key"], [])
+                        if branch:
+                            frames.append((list(branch), 0))
+                continue
+
+            blk = item
             cfg = blk.config
+            fork_pos = len(frames)
 
             if blk.type == "ask_llm":
                 step_name = str(cfg.get("name", "ask_llm"))
@@ -957,9 +1110,13 @@ class WorkflowRunner:
                 cur_iter = int(state.get(loop_key, 0))
                 if cur_iter > 0 and eval_condition(state.get(cond_var), op, target_val):
                     trace.append(TraceEvent(blk.id, blk.type, "Loop Exit", f"{cond_var}={state.get(cond_var)!r} satisfied"))
+                    if get_node_fork_branches(blk):
+                        frames.append(([_ForkStep(blk)], 0))
                     continue
                 if cur_iter >= max_iters:
                     trace.append(TraceEvent(blk.id, blk.type, "Loop Cap Reached", f"Stopped at max_iterations={max_iters}"))
+                    if get_node_fork_branches(blk):
+                        frames.append(([_ForkStep(blk)], 0))
                     continue
                 state[loop_key] = cur_iter + 1
                 trace.append(
@@ -988,6 +1145,8 @@ class WorkflowRunner:
                     trace.append(
                         TraceEvent(blk.id, blk.type, "For Each Complete", f"Processed {len(items)} item(s) from {list_var}")
                     )
+                    if get_node_fork_branches(blk):
+                        frames.append(([_ForkStep(blk)], 0))
                     continue
                 state[item_var] = items[cur_idx]
                 state[idx_key] = cur_idx + 1
@@ -1005,43 +1164,18 @@ class WorkflowRunner:
                     frames.append((list(body), 0))
 
             elif blk.type == "parallel":
-                lane_a = blk.branches.get("laneA", [])
-                lane_b = blk.branches.get("laneB", [])
-                trace.append(TraceEvent(blk.id, blk.type, "Parallel Fan-Out", "Running Branch A & Branch B"))
-
-                def run_lane(lane_nodes: list[BlockNode]) -> tuple[dict[str, Any], list[TraceEvent]]:
-                    sub_wf = WorkflowSchema(trigger=wf.trigger, blocks=lane_nodes)
-                    sub_state = dict(state)
-                    sub_trace: list[TraceEvent] = []
-                    self._drive(
-                        sub_wf,
-                        sub_state,
-                        sub_trace,
-                        [(list(lane_nodes), 0)],
-                        llm=llm,
-                        tools=tools,
-                        react_runner=react_runner,
-                        api_key=api_key,
-                        emit_end=False,
-                    )
-                    return sub_state, sub_trace
-
-                with ThreadPoolExecutor(max_workers=2) as pool:
-                    fut_a = pool.submit(run_lane, lane_a) if lane_a else None
-                    fut_b = pool.submit(run_lane, lane_b) if lane_b else None
-                    if fut_a is not None:
-                        st_a, tr_a = fut_a.result()
-                        for k, v in st_a.items():
-                            if k not in state or state[k] != v:
-                                state[k] = v
-                        trace.extend(tr_a)
-                    if fut_b is not None:
-                        st_b, tr_b = fut_b.result()
-                        for k, v in st_b.items():
-                            if k not in state or state[k] != v:
-                                state[k] = v
-                        trace.extend(tr_b)
-
+                lane_keys = get_parallel_lanes(blk)
+                trace.append(TraceEvent(blk.id, blk.type, "Parallel Fan-Out", f"Running {len(lane_keys)} branches"))
+                self._run_parallel_branches(
+                    wf,
+                    state,
+                    trace,
+                    [blk.branches.get(k, []) for k in lane_keys],
+                    llm=llm,
+                    tools=tools,
+                    react_runner=react_runner,
+                    api_key=api_key,
+                )
                 trace.append(TraceEvent(blk.id, blk.type, "Parallel Fan-In", "Joined parallel branches into state"))
 
             elif blk.type == "try_fallback":
@@ -1107,6 +1241,9 @@ class WorkflowRunner:
                     interrupt_payload={"question": question},
                     resume_token=token,
                 )
+
+            if blk.type not in ("repeat_until", "for_each", "human_approval") and get_node_fork_branches(blk):
+                frames.insert(fork_pos, ([_ForkStep(blk)], 0))
 
         if emit_end:
             trace.append(TraceEvent("end", "end", "END", "Workflow completed & checkpoint saved."))

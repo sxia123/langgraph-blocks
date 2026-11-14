@@ -12,6 +12,7 @@ ALLOWED_OPERATORS = frozenset({"==", "!=", ">=", ">", "<=", "<", "in"})
 ALLOWED_GUARDRAIL_RULES = frozenset({"not_empty", "no_pii", "max_length", "regex"})
 ALLOWED_LLM_MODES = frozenset({"api", "custom_endpoint"})
 ALLOWED_API_PROVIDERS = frozenset({"openai", "anthropic", "gemini"})
+ALLOWED_FORK_MODES = frozenset({"parallel", "conditional"})
 
 CONTAINER_BRANCHES: dict[str, tuple[str, ...]] = {
     "if_else": ("then", "else"),
@@ -76,6 +77,8 @@ _CAMEL_TO_SNAKE = {
     "apiProvider": "api_provider",
     "apiKeyEnv": "api_key_env",
     "endpointUrl": "endpoint_url",
+    "forkMode": "fork_mode",
+    "forkBranches": "fork_branches",
 }
 
 
@@ -328,15 +331,48 @@ def validate_workflow(workflow: WorkflowSchema) -> list[str]:
                     if tok_val < 1:
                         errors.append(f"{loc}: max_tokens must be >= 1.")
 
+            if "fork_mode" in node.config and node.config["fork_mode"] not in (None, ""):
+                f_mode = str(node.config["fork_mode"])
+                if f_mode not in ALLOWED_FORK_MODES:
+                    errors.append(
+                        f"{loc}: fork_mode must be 'parallel' or 'conditional' (got '{f_mode}')."
+                    )
+
+            raw_fork = node.config.get("fork_branches")
             expected_branches = CONTAINER_BRANCHES.get(node.type)
+            reserved_keys = set(expected_branches or ())
+            declared_fork_keys: set[str] = set()
+            if raw_fork is not None:
+                if not isinstance(raw_fork, list):
+                    errors.append(f"{loc}: fork_branches must be a list.")
+                else:
+                    for b_idx, item in enumerate(raw_fork):
+                        if not isinstance(item, dict) or not str(item.get("key", "")).strip():
+                            errors.append(f"{loc}: fork_branches[{b_idx}] must include a non-empty 'key'.")
+                            continue
+                        b_key = str(item["key"]).strip()
+                        if b_key in reserved_keys:
+                            errors.append(f"{loc}: fork branch key '{b_key}' collides with built-in branch.")
+                        elif b_key in declared_fork_keys:
+                            errors.append(f"{loc}: duplicate fork branch key '{b_key}'.")
+                        else:
+                            declared_fork_keys.add(b_key)
+                        b_op = str(item.get("op", "==") or "==")
+                        if not bool(item.get("is_default", False)) and b_op not in ALLOWED_OPERATORS:
+                            errors.append(f"{loc}: unsupported fork condition operator '{b_op}'.")
+
             if expected_branches is not None:
                 for b_key in expected_branches:
                     if b_key not in node.branches:
                         errors.append(f"{loc}: missing branch '{b_key}'.")
                     else:
                         walk(node.branches[b_key], f"{loc}.{b_key}")
+                for extra_key, extra_nodes in node.branches.items():
+                    if extra_key not in reserved_keys:
+                        walk(extra_nodes, f"{loc}.{extra_key}")
             elif node.branches:
-                errors.append(f"{loc}: leaf block '{node.type}' cannot contain branches.")
+                for b_key, children in node.branches.items():
+                    walk(children, f"{loc}.{b_key}")
 
     walk(workflow.blocks, "blocks")
     return errors
@@ -372,8 +408,83 @@ def collect_state_vars(workflow: WorkflowSchema) -> list[str]:
                 left_var = node.config.get("left_var")
                 if left_var:
                     add_key(str(left_var))
+            for f_spec in get_node_fork_branches(node):
+                if not f_spec["is_default"] and f_spec["var"]:
+                    add_key(f_spec["var"])
             for children in node.branches.values():
                 walk(children)
 
     walk(workflow.blocks)
     return keys
+
+
+def get_parallel_lanes(node: BlockNode) -> list[str]:
+    """Return ordered branch keys belonging to a parallel container block."""
+    if node.type != "parallel":
+        return []
+    fork_keys = {
+        str(item["key"])
+        for item in (node.config.get("fork_branches") or [])
+        if isinstance(item, dict) and item.get("key")
+    }
+    lanes = ["laneA", "laneB"]
+    for key in node.branches:
+        if key not in lanes and key not in fork_keys:
+            lanes.append(key)
+    return lanes
+
+
+def get_fork_mode(node: BlockNode) -> str:
+    """Return the normalized execution mode ('parallel' or 'conditional') for a node's fork."""
+    raw = str(node.config.get("fork_mode") or "parallel").strip()
+    return "conditional" if raw == "conditional" else "parallel"
+
+
+def get_node_fork_branches(node: BlockNode) -> list[dict[str, Any]]:
+    """Return ordered normalized outgoing fork descriptors for any block."""
+    reserved = set(CONTAINER_BRANCHES.get(node.type, ()))
+    if node.type == "parallel":
+        reserved.update(k for k in node.branches if k.startswith("lane"))
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    default_var = str(
+        node.config.get("output_var")
+        or node.config.get("target_var")
+        or node.config.get("error_var")
+        or "user_query"
+    )
+    raw_list = node.config.get("fork_branches")
+    if isinstance(raw_list, list):
+        for item in raw_list:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key", "")).strip()
+            if not key or key in reserved or key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "key": key,
+                    "label": str(item.get("label") or key),
+                    "var": str(item.get("var") or default_var),
+                    "op": str(item.get("op") or "=="),
+                    "val": item.get("val", ""),
+                    "is_default": bool(item.get("is_default", False)),
+                }
+            )
+    for key in node.branches:
+        if key in reserved or key in seen:
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "key": key,
+                "label": key,
+                "var": default_var,
+                "op": "==",
+                "val": key,
+                "is_default": False,
+            }
+        )
+    return out

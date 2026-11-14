@@ -227,3 +227,98 @@ def test_llm_connection_mode_validation() -> None:
     assert "llm_mode must be 'api' or 'custom_endpoint'" in err
     assert "unsupported api_provider" in err
     assert "endpoint_url must start with 'http://' or 'https://'" in err
+
+
+def test_per_block_fork_validation_and_parallel_lanes():
+    # Leaf block with conditional fork_branches validates and registers condition variable in state
+    cond_wf = {
+        "trigger": {"name": "leaf_cond_fork", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "ask1",
+                "type": "ask_llm",
+                "config": {
+                    "prompt": "Classify {{user_query}}",
+                    "output_var": "route",
+                    "fork_mode": "conditional",
+                    "fork_branches": [
+                        {"key": "urgent", "label": "Urgent", "var": "priority", "op": "==", "val": "high", "is_default": False},
+                        {"key": "normal", "label": "Normal", "is_default": True},
+                    ],
+                },
+                "branches": {
+                    "urgent": [
+                        {"id": "s1", "type": "set_state", "config": {"target_var": "status", "value_expr": "fast"}}
+                    ],
+                    "normal": [
+                        {"id": "s2", "type": "set_state", "config": {"target_var": "status", "value_expr": "std"}}
+                    ],
+                },
+            }
+        ],
+    }
+    wf = parse_workflow(cond_wf)
+    state_vars = collect_state_vars(wf)
+    assert "priority" in state_vars
+    assert "route" in state_vars
+    assert "status" in state_vars
+
+    # Parallel container with 3 lanes (laneA, laneB, laneC) validates cleanly
+    par3_wf = {
+        "trigger": {"name": "parallel_three_lanes", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "p1",
+                "type": "parallel",
+                "config": {"label": "Fan out 3"},
+                "branches": {
+                    "laneA": [{"id": "a1", "type": "set_state", "config": {"target_var": "va", "value_expr": "1"}}],
+                    "laneB": [{"id": "b1", "type": "set_state", "config": {"target_var": "vb", "value_expr": "2"}}],
+                    "laneC": [{"id": "c1", "type": "set_state", "config": {"target_var": "vc", "value_expr": "3"}}],
+                },
+            }
+        ],
+    }
+    wf3 = parse_workflow(par3_wf)
+    assert set(wf3.blocks[0].branches.keys()) == {"laneA", "laneB", "laneC"}
+
+    # Invalid fork_mode, unsupported fork op, and colliding branch keys raise ValidationError
+    bad_fork_wf = {
+        "trigger": {"name": "bad_forks", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "a1",
+                "type": "set_state",
+                "config": {
+                    "target_var": "x",
+                    "value_expr": "1",
+                    "fork_mode": "invalid_mode",
+                    "fork_branches": [
+                        {"key": "b1", "label": "B1"},
+                    ],
+                },
+                "branches": {"b1": []},
+            },
+            {
+                "id": "a2",
+                "type": "set_state",
+                "config": {
+                    "target_var": "y",
+                    "value_expr": "2",
+                    "fork_mode": "conditional",
+                    "fork_branches": [
+                        {"key": "dup", "label": "One", "var": "x", "op": "bogus_op", "val": "1"},
+                        {"key": "dup", "label": "Two", "is_default": True},
+                    ],
+                },
+                "branches": {"dup": []},
+            },
+        ],
+    }
+    with pytest.raises(ValidationError) as exc_info:
+        parse_workflow(bad_fork_wf)
+    err = " | ".join(exc_info.value.errors).lower()
+    assert "fork_mode" in err
+    assert "unsupported fork condition operator" in err
+    assert "duplicate fork branch key 'dup'" in err
+

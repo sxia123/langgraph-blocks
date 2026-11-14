@@ -5,7 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from .compiler_sg import _RUNTIME_HELPERS, _checkpointer_import, _llm_call_kwargs
-from .schema import BlockNode, WorkflowSchema, parse_workflow, sanitize_identifier
+from .schema import (
+    BlockNode,
+    WorkflowSchema,
+    get_fork_mode,
+    get_node_fork_branches,
+    get_parallel_lanes,
+    parse_workflow,
+    sanitize_identifier,
+)
 
 
 def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
@@ -22,6 +30,59 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
         nonlocal task_counter
         task_counter += 1
         return f"{sanitize_identifier(prefix, 'step')}_task_{task_counter}"
+
+    def emit_parallel_branches(pairs: list[tuple[str, list[BlockNode]]], pad: str) -> list[str]:
+        lines_out: list[str] = []
+        futures: list[str] = []
+        for branch_label, branch_blocks in pairs:
+            if not branch_blocks:
+                continue
+            lane_task = next_task_name(branch_label)
+            lane_body = emit_sequence(branch_blocks, 8)
+            task_defs.append(
+                "\n".join(
+                    [
+                        "    @task",
+                        f"    def {lane_task}(branch_state: dict[str, Any]) -> dict[str, Any]:",
+                        "        state = dict(branch_state)",
+                        *lane_body,
+                        "        return state",
+                    ]
+                )
+            )
+            fut_var = f"fut_{lane_task}"
+            lines_out.append(f"{pad}{fut_var} = {lane_task}(dict(state))")
+            futures.append(fut_var)
+        for fut_var in futures:
+            lines_out.append(f"{pad}state.update({fut_var}.result())")
+        return lines_out
+
+    def emit_fork(blk: BlockNode, indent: int, pad: str) -> list[str]:
+        fork_specs = get_node_fork_branches(blk)
+        if not fork_specs:
+            return []
+        if get_fork_mode(blk) == "parallel":
+            return emit_parallel_branches(
+                [(spec["key"], blk.branches.get(spec["key"], [])) for spec in fork_specs],
+                pad,
+            )
+        out_fork: list[str] = []
+        rules = [s for s in fork_specs if not s["is_default"]]
+        default_spec = next((s for s in fork_specs if s["is_default"]), None)
+        for idx, spec in enumerate(rules):
+            kw = "if" if idx == 0 else "elif"
+            c_var = sanitize_identifier(spec["var"])
+            out_fork.append(
+                f"{pad}{kw} _eval_cond(state.get({c_var!r}), {spec['op']!r}, {spec['val']!r}):"
+            )
+            out_fork.extend(emit_sequence(blk.branches.get(spec["key"], []), indent + 4))
+        if default_spec is not None:
+            if rules:
+                out_fork.append(f"{pad}else:")
+                out_fork.extend(emit_sequence(blk.branches.get(default_spec["key"], []), indent + 4))
+            else:
+                out_fork.extend(emit_sequence(blk.branches.get(default_spec["key"], []), indent))
+        return out_fork
 
     def emit_sequence(blocks: list[BlockNode], indent: int) -> list[str]:
         pad = " " * indent
@@ -192,7 +253,8 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 out_var = sanitize_identifier(str(cfg.get("output_var", "final_response")))
                 template = str(cfg.get("template", ""))
                 out.append(f"{pad}state[{out_var!r}] = _render({template!r}, state)")
-                out.append(f"{pad}return dict(state)")
+                if not get_node_fork_branches(blk):
+                    out.append(f"{pad}return dict(state)")
 
             elif blk.type == "if_else":
                 left_var = sanitize_identifier(str(cfg.get("left_var", "intent")))
@@ -293,30 +355,10 @@ def compile_to_functional_api(workflow: WorkflowSchema | dict[str, Any]) -> str:
                 out.extend(emit_sequence(blk.branches.get("fallback", []), indent + 4))
 
             elif blk.type == "parallel":
-                lane_a = blk.branches.get("laneA", [])
-                lane_b = blk.branches.get("laneB", [])
-                futures: list[str] = []
-                for lane_label, lane_blocks in (("lane_a", lane_a), ("lane_b", lane_b)):
-                    if not lane_blocks:
-                        continue
-                    lane_task = next_task_name(lane_label)
-                    lane_body = emit_sequence(lane_blocks, 8)
-                    task_defs.append(
-                        "\n".join(
-                            [
-                                "    @task",
-                                f"    def {lane_task}(branch_state: dict[str, Any]) -> dict[str, Any]:",
-                                "        state = dict(branch_state)",
-                                *lane_body,
-                                "        return state",
-                            ]
-                        )
-                    )
-                    fut_var = f"fut_{lane_task}"
-                    out.append(f"{pad}{fut_var} = {lane_task}(dict(state))")
-                    futures.append(fut_var)
-                for fut_var in futures:
-                    out.append(f"{pad}state.update({fut_var}.result())")
+                pairs = [(lane_key, blk.branches.get(lane_key, [])) for lane_key in get_parallel_lanes(blk)]
+                out.extend(emit_parallel_branches(pairs, pad))
+
+            out.extend(emit_fork(blk, indent, pad))
 
         return out
 

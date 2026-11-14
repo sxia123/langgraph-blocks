@@ -232,3 +232,92 @@ def test_runtime_custom_endpoint_with_env_and_transient_api_key(monkeypatch) -> 
         srv.shutdown()
         srv.server_close()
         t.join(timeout=2)
+
+
+def test_runtime_per_block_forks_and_container_forks() -> None:
+    # 1) build_state_graph: parallel fork (with empty pass-through branch) + repeat_until with conditional fork
+    wf_sg = {
+        "trigger": {"name": "rt_sg_forks", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "pstep",
+                "type": "set_state",
+                "config": {
+                    "target_var": "base",
+                    "value_expr": "go",
+                    "fork_mode": "parallel",
+                    "fork_branches": [
+                        {"key": "b1", "label": "One"},
+                        {"key": "b2", "label": "Empty"},
+                    ],
+                },
+                "branches": {
+                    "b1": [{"id": "s1", "type": "set_state", "config": {"target_var": "flag1", "value_expr": "Y"}}],
+                    "b2": [],
+                },
+            },
+            {
+                "id": "loop1",
+                "type": "repeat_until",
+                "config": {
+                    "condition_var": "score",
+                    "operator": ">=",
+                    "target_val": "8",
+                    "max_iterations": 2,
+                    "fork_mode": "conditional",
+                    "fork_branches": [
+                        {"key": "hit", "label": "Hit", "var": "flag1", "op": "==", "val": "Y", "is_default": False},
+                        {"key": "miss", "label": "Miss", "is_default": True},
+                    ],
+                },
+                "branches": {
+                    "body": [{"id": "setscore", "type": "set_state", "config": {"target_var": "score", "value_expr": "9"}}],
+                    "hit": [{"id": "sh", "type": "set_state", "config": {"target_var": "loop_tag", "value_expr": "OK:{{base}}:{{score}}"}}],
+                    "miss": [{"id": "sm", "type": "set_state", "config": {"target_var": "loop_tag", "value_expr": "NO"}}],
+                },
+            },
+        ],
+    }
+    graph = build_state_graph(wf_sg)
+    sg_out = graph.invoke({"user_query": "run"}, config={"configurable": {"thread_id": str(uuid.uuid4())}})
+    assert sg_out["flag1"] == "Y"
+    assert sg_out["loop_tag"] == "OK:go:9"
+
+    # 2) WorkflowRunner: human_approval with conditional fork + pause/resume
+    wf_runner = {
+        "trigger": {"name": "rt_runner_fork", "input_var": "user_query", "checkpointer": "MemorySaver"},
+        "blocks": [
+            {
+                "id": "ha1",
+                "type": "human_approval",
+                "config": {
+                    "question": "Approve?",
+                    "output_var": "approval",
+                    "fork_mode": "conditional",
+                    "fork_branches": [
+                        {"key": "yes", "label": "Approved", "var": "decision", "op": "==", "val": "approved", "is_default": False},
+                        {"key": "no", "label": "Denied", "is_default": True},
+                    ],
+                },
+                "branches": {
+                    "approved": [{"id": "da", "type": "set_state", "config": {"target_var": "decision", "value_expr": "approved"}}],
+                    "rejected": [{"id": "dr", "type": "set_state", "config": {"target_var": "decision", "value_expr": "rejected"}}],
+                    "yes": [{"id": "ry", "type": "set_state", "config": {"target_var": "outcome", "value_expr": "APPROVED"}}],
+                    "no": [{"id": "rn", "type": "set_state", "config": {"target_var": "outcome", "value_expr": "DENIED"}}],
+                },
+            }
+        ],
+    }
+    runner = WorkflowRunner()
+    paused_yes = runner.start(wf_runner, "please")
+    assert paused_yes.status == "paused"
+    resumed_yes = runner.resume(paused_yes.resume_token, True)
+    assert resumed_yes.status == "done"
+    assert resumed_yes.state["outcome"] == "APPROVED"
+
+    paused_no = runner.start(wf_runner, "please")
+    assert paused_no.status == "paused"
+    resumed_no = runner.resume(paused_no.resume_token, False)
+    assert resumed_no.status == "done"
+    assert resumed_no.state["outcome"] == "DENIED"
+
